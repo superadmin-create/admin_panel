@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { VivaResult, VivaEvaluation } from "@/lib/types/viva";
 import {
   Search,
   Download,
@@ -44,20 +45,6 @@ import {
   X,
   Mail,
 } from "lucide-react";
-
-interface VivaResult {
-  id: string;
-  timestamp: string;
-  studentName: string;
-  studentEmail: string;
-  subject: string;
-  topics: string;
-  questionsAnswered: number;
-  score: number;
-  overallFeedback: string;
-  transcript: string;
-  recordingUrl?: string;
-}
 
 export default function ResultsPage() {
   const [results, setResults] = useState<VivaResult[]>([]);
@@ -621,12 +608,127 @@ export default function ResultsPage() {
                 )}
               </div>
 
-              {/* Questions & Answers */}
-              <h4 className="font-semibold mb-4">Questions & Answers</h4>
-              <div className="space-y-4">
-                {parseTranscript(selectedResult.transcript).length > 0 ? (
-                  parseTranscript(selectedResult.transcript).map(
-                    (item, index) => (
+              {/* Per-Question Feedback */}
+              {selectedResult.evaluation && selectedResult.evaluation.marks && selectedResult.evaluation.feedback ? (
+                <div className="space-y-6">
+                  <h4 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-primary" />
+                    Question-by-Question Evaluation
+                  </h4>
+                  {selectedResult.evaluation.marks.map((mark, index) => {
+                    const feedback = selectedResult.evaluation?.feedback?.find(
+                      (f) => f.questionNumber === mark.questionNumber
+                    );
+                    const marksPercentage = (mark.marks / mark.maxMarks) * 100;
+                    const markColor =
+                      marksPercentage >= 80
+                        ? "text-green-600 dark:text-green-400"
+                        : marksPercentage >= 60
+                        ? "text-yellow-600 dark:text-yellow-400"
+                        : "text-red-600 dark:text-red-400";
+                    const markBg =
+                      marksPercentage >= 80
+                        ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
+                        : marksPercentage >= 60
+                        ? "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800"
+                        : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800";
+
+                    return (
+                      <div
+                        key={mark.questionNumber}
+                        className="border rounded-lg p-5 bg-card shadow-sm"
+                      >
+                        {/* Question Header */}
+                        <div className="flex items-center justify-between mb-4 pb-3 border-b">
+                          <h5 className="font-semibold text-base flex items-center gap-2">
+                            Question {mark.questionNumber}
+                          </h5>
+                          <div
+                            className={`px-3 py-1 rounded-md font-bold text-sm border ${markBg} ${markColor}`}
+                          >
+                            {mark.marks}/{mark.maxMarks} marks
+                          </div>
+                        </div>
+
+                        {/* Question */}
+                        <div className="mb-4">
+                          <div className="text-xs font-semibold text-primary mb-2 uppercase">
+                            Question:
+                          </div>
+                          <div className="p-3 bg-primary/5 border-l-4 border-primary rounded-md">
+                            <p className="text-sm leading-relaxed">{mark.question}</p>
+                          </div>
+                        </div>
+
+                        {/* Student Answer */}
+                        <div className="mb-4">
+                          <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase">
+                            Student's Answer:
+                          </div>
+                          <div className="p-3 bg-muted/50 border-l-4 border-muted-foreground rounded-md">
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                              {mark.answer || "No answer provided"}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Feedback */}
+                        {feedback && (
+                          <div className="space-y-3">
+                            <div>
+                              <div className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-2 uppercase">
+                                Feedback:
+                              </div>
+                              <div className="p-3 bg-purple-50 dark:bg-purple-950/20 border-l-4 border-purple-500 rounded-md">
+                                <p className="text-sm leading-relaxed">{feedback.feedback}</p>
+                              </div>
+                            </div>
+
+                            {/* Strengths */}
+                            {feedback.strengths && feedback.strengths.length > 0 && (
+                              <div>
+                                <div className="text-xs font-semibold text-green-600 dark:text-green-400 mb-2 uppercase flex items-center gap-1">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Strengths:
+                                </div>
+                                <ul className="list-disc list-inside space-y-1 ml-2">
+                                  {feedback.strengths.map((strength, idx) => (
+                                    <li key={idx} className="text-sm text-foreground">
+                                      {strength}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Weaknesses */}
+                            {feedback.weaknesses && feedback.weaknesses.length > 0 && (
+                              <div>
+                                <div className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2 uppercase flex items-center gap-1">
+                                  <AlertCircle className="h-3 w-3" />
+                                  Areas for Improvement:
+                                </div>
+                                <ul className="list-disc list-inside space-y-1 ml-2">
+                                  {feedback.weaknesses.map((weakness, idx) => (
+                                    <li key={idx} className="text-sm text-foreground">
+                                      {weakness}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* Fallback to transcript view if evaluation not available */
+                <div className="space-y-4">
+                  <h4 className="font-semibold mb-4">Questions & Answers (Transcript)</h4>
+                  {parseTranscript(selectedResult.transcript).length > 0 ? (
+                    parseTranscript(selectedResult.transcript).map((item, index) => (
                       <div
                         key={index}
                         className={`p-3 rounded-lg ${
@@ -646,20 +748,20 @@ export default function ResultsPage() {
                         </span>
                         <p className="mt-1">{item.content}</p>
                       </div>
-                    )
-                  )
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>No transcript available for this viva.</p>
-                    {selectedResult.transcript && (
-                      <pre className="mt-4 text-left text-xs bg-muted p-4 rounded overflow-x-auto whitespace-pre-wrap">
-                        {selectedResult.transcript}
-                      </pre>
-                    )}
-                  </div>
-                )}
-              </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>No transcript available for this viva.</p>
+                      {selectedResult.transcript && (
+                        <pre className="mt-4 text-left text-xs bg-muted p-4 rounded overflow-x-auto whitespace-pre-wrap">
+                          {selectedResult.transcript}
+                        </pre>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
