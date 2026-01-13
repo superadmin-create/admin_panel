@@ -98,26 +98,41 @@ export async function getVivaResults(): Promise<{
     // Fetch all data from the sheet (skip header row)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: config.sheetId,
-      range: `'${SHEET_NAME}'!A2:J1000`, // Skip header, get up to 1000 rows
+      range: `'${SHEET_NAME}'!A2:K1000`, // Skip header, get up to 1000 rows (including evaluation column K)
     });
 
     const rows = response.data.values || [];
 
     // Convert rows to VivaResult objects
     // Sheet columns: Date & Time, Student Name, Email, Subject, Topics, Questions Answered, Score, Overall Feedback, Transcript, Recording
-    const results: VivaResult[] = rows.map((row, index) => ({
-      id: `VIVA${String(index + 1).padStart(4, "0")}`,
-      timestamp: row[0] || "",
-      studentName: row[1] || "Unknown",
-      studentEmail: row[2] || "",
-      subject: row[3] || "Unknown Subject",
-      topics: row[4] || "",
-      questionsAnswered: parseQuestionsCount(row[5]),
-      score: parseScore(row[6]),
-      overallFeedback: row[7] || "",
-      transcript: row[8] || "",
-      recordingUrl: row[9] || undefined,
-    }));
+    // Note: Evaluation JSON might be in a separate column or embedded - we'll try to parse it
+    const results: VivaResult[] = rows.map((row, index) => {
+      // Try to parse evaluation from row[10] if it exists, or from a JSON column
+      let evaluation: VivaEvaluation | null = null;
+      try {
+        // Check if there's an evaluation column (column K, index 10)
+        if (row[10]) {
+          evaluation = JSON.parse(row[10]);
+        }
+      } catch {
+        // Evaluation not available or not in expected format
+      }
+
+      return {
+        id: `VIVA${String(index + 1).padStart(4, "0")}`,
+        timestamp: row[0] || "",
+        studentName: row[1] || "Unknown",
+        studentEmail: row[2] || "",
+        subject: row[3] || "Unknown Subject",
+        topics: row[4] || "",
+        questionsAnswered: parseQuestionsCount(row[5]),
+        score: parseScore(row[6]),
+        overallFeedback: row[7] || "",
+        transcript: row[8] || "",
+        recordingUrl: row[9] || undefined,
+        evaluation: evaluation || undefined,
+      };
+    });
 
     // Sort by timestamp descending (most recent first)
     results.sort(

@@ -42,6 +42,7 @@ import {
   AlertCircle,
   MessageSquare,
   X,
+  Mail,
 } from "lucide-react";
 
 interface VivaResult {
@@ -66,6 +67,7 @@ export default function ResultsPage() {
   const [selectedSubject, setSelectedSubject] = useState("All Subjects");
   const [activeTab, setActiveTab] = useState("all");
   const [selectedResult, setSelectedResult] = useState<VivaResult | null>(null);
+  const [sendingEmail, setSendingEmail] = useState<string | null>(null);
 
   // Fetch results from API
   const fetchResults = async () => {
@@ -193,6 +195,46 @@ export default function ResultsPage() {
     }
 
     return qaPairs;
+  };
+
+  // Send email with results to student
+  const handleSendEmail = async (result: VivaResult) => {
+    if (!result.studentEmail) {
+      alert("Student email is not available");
+      return;
+    }
+
+    setSendingEmail(result.id);
+    try {
+      const response = await fetch("/api/send-result-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentEmail: result.studentEmail,
+          studentName: result.studentName,
+          subject: result.subject,
+          topics: result.topics,
+          score: result.score,
+          questionsAnswered: result.questionsAnswered,
+          overallFeedback: result.overallFeedback,
+          transcript: result.transcript,
+          timestamp: result.timestamp,
+          evaluation: result.evaluation,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        alert(`Email sent successfully to ${result.studentEmail}`);
+      } else {
+        alert(data.error || "Failed to send email");
+      }
+    } catch (error) {
+      console.error("Failed to send email:", error);
+      alert("Failed to send email. Please try again.");
+    } finally {
+      setSendingEmail(null);
+    }
   };
 
   if (loading) {
@@ -442,7 +484,22 @@ export default function ResultsPage() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8"
+                                  onClick={() => handleSendEmail(result)}
+                                  disabled={sendingEmail === result.id || !result.studentEmail}
+                                  title="Send results via email"
+                                >
+                                  {sendingEmail === result.id ? (
+                                    <RefreshCw className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Mail className="h-4 w-4" />
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
                                   onClick={() => setSelectedResult(result)}
+                                  title="View details"
                                 >
                                   <Eye className="h-4 w-4" />
                                 </Button>
@@ -452,6 +509,7 @@ export default function ResultsPage() {
                                     size="icon"
                                     className="h-8 w-8"
                                     asChild
+                                    title="View recording"
                                   >
                                     <a
                                       href={result.recordingUrl}
@@ -496,25 +554,71 @@ export default function ResultsPage() {
                   {selectedResult.studentName} - {selectedResult.subject}
                 </CardDescription>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSelectedResult(null)}
-              >
-                <X className="h-5 w-5" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleSendEmail(selectedResult)}
+                  disabled={sendingEmail === selectedResult.id || !selectedResult.studentEmail}
+                >
+                  {sendingEmail === selectedResult.id ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="h-4 w-4 mr-2" />
+                      Send Email
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSelectedResult(null)}
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="overflow-y-auto max-h-[calc(80vh-120px)]">
               {/* Score and Feedback */}
-              <div className="mb-6 p-4 bg-muted/50 rounded-lg">
-                <div className="flex items-center gap-4 mb-3">
-                  <span className="font-medium">Score:</span>
+              <div className="mb-6 p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-4 mb-4">
+                  <span className="font-semibold text-foreground">Score:</span>
                   {getScoreBadge(selectedResult.score)}
                   <span className="text-muted-foreground">
-                    ({selectedResult.questionsAnswered} questions)
+                    ({selectedResult.questionsAnswered} questions answered)
                   </span>
                 </div>
-                <p className="text-sm">{selectedResult.overallFeedback}</p>
+                {selectedResult.overallFeedback && (
+                  <div className="mt-4">
+                    <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4 text-primary" />
+                      Detailed Feedback & Recommendations
+                    </h4>
+                    <div className="bg-background/80 p-4 rounded-md border border-border/50">
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+                        {selectedResult.overallFeedback}
+                      </p>
+                    </div>
+                    {selectedResult.score < 50 && (
+                      <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md">
+                        <p className="text-xs text-amber-800 dark:text-amber-200 font-medium">
+                          💡 Review the questions and answers below to understand where you can improve. Focus on the areas mentioned in the feedback above.
+                        </p>
+                      </div>
+                    )}
+                    {selectedResult.score >= 80 && (
+                      <div className="mt-3 p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md">
+                        <p className="text-xs text-green-800 dark:text-green-200 font-medium">
+                          🎉 Great work! Continue building on your strengths and explore advanced topics to further enhance your knowledge.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Questions & Answers */}

@@ -12,6 +12,7 @@ export interface VivaResult {
   overallFeedback: string;
   transcript: string;
   recordingUrl?: string;
+  evaluation?: VivaEvaluation; // Per-question evaluation data
 }
 
 export interface EvaluationMarks {
