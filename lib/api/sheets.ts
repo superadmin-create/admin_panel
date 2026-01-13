@@ -96,26 +96,38 @@ export async function getVivaResults(): Promise<{
     const sheets = google.sheets({ version: "v4", auth });
 
     // Fetch all data from the sheet (skip header row)
+    // Use a large range to get all rows, or use A2:K to get all rows dynamically
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: config.sheetId,
-      range: `'${SHEET_NAME}'!A2:K1000`, // Skip header, get up to 1000 rows (including evaluation column K)
+      range: `'${SHEET_NAME}'!A2:K`, // Skip header, get all rows (including evaluation column K)
     });
 
     const rows = response.data.values || [];
 
     // Convert rows to VivaResult objects
-    // Sheet columns: Date & Time, Student Name, Email, Subject, Topics, Questions Answered, Score, Overall Feedback, Transcript, Recording
-    // Note: Evaluation JSON might be in a separate column or embedded - we'll try to parse it
+    // Sheet columns: Date & Time, Student Name, Email, Subject, Topics, Questions Answered, Score, Overall Feedback, Transcript, Recording, Evaluation (JSON)
     const results: VivaResult[] = rows.map((row, index) => {
-      // Try to parse evaluation from row[10] if it exists, or from a JSON column
+      // Try to parse evaluation from row[10] if it exists (column K, index 10)
       let evaluation: VivaEvaluation | null = null;
       try {
         // Check if there's an evaluation column (column K, index 10)
-        if (row[10]) {
-          evaluation = JSON.parse(row[10]);
+        if (row[10] && row[10].trim()) {
+          const evalStr = row[10].trim();
+          // Handle both string JSON and already parsed objects
+          if (evalStr.startsWith('{') || evalStr.startsWith('[')) {
+            evaluation = JSON.parse(evalStr);
+            // Log successful parsing for debugging (only in development)
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`[Sheets] Successfully parsed evaluation for row ${index + 2}, student: ${row[1] || 'Unknown'}`);
+            }
+          }
+        } else if (process.env.NODE_ENV === 'development') {
+          console.log(`[Sheets] No evaluation data found in column K for row ${index + 2}`);
         }
-      } catch {
-        // Evaluation not available or not in expected format
+      } catch (error) {
+        // Log parsing errors for debugging
+        console.warn(`[Sheets] Failed to parse evaluation JSON for row ${index + 2}:`, error instanceof Error ? error.message : String(error));
+        console.warn(`[Sheets] Evaluation data (first 200 chars):`, row[10]?.substring(0, 200));
       }
 
       return {
