@@ -147,10 +147,49 @@ export async function getVivaResults(): Promise<{
     });
 
     // Sort by timestamp descending (most recent first)
-    results.sort(
-      (a, b) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
+    // Handle both ISO format and formatted string timestamps
+    // Normalize all timestamps to local time for accurate comparison
+    results.sort((a, b) => {
+      const parseTimestamp = (ts: string): number => {
+        if (!ts) return 0;
+        
+        // Try ISO format first (e.g., "2026-01-15T10:11:35.724Z")
+        // ISO timestamps are in UTC, so we convert to local time
+        if (ts.includes('T') && (ts.includes('Z') || ts.includes('+'))) {
+          const date = new Date(ts);
+          // Return local time in milliseconds for comparison
+          return date.getTime();
+        }
+        
+        // Try formatted string (e.g., "15 Jan 2026, 10:41 am")
+        // These are already in local time
+        const formattedMatch = ts.match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(am|pm)/i);
+        if (formattedMatch) {
+          const [, day, month, year, hour, minute, ampm] = formattedMatch;
+          const monthMap: Record<string, number> = {
+            jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+            jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+          };
+          let hour24 = parseInt(hour, 10);
+          if (ampm.toLowerCase() === 'pm' && hour24 !== 12) hour24 += 12;
+          if (ampm.toLowerCase() === 'am' && hour24 === 12) hour24 = 0;
+          const date = new Date(
+            parseInt(year, 10),
+            monthMap[month.toLowerCase()],
+            parseInt(day, 10),
+            hour24,
+            parseInt(minute, 10)
+          );
+          return date.getTime();
+        }
+        
+        // Fallback to standard Date parsing
+        const parsed = new Date(ts);
+        return isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+      };
+      
+      return parseTimestamp(b.timestamp) - parseTimestamp(a.timestamp);
+    });
 
     return { success: true, data: results };
   } catch (error) {
@@ -245,8 +284,8 @@ export async function getVivaStats(): Promise<{
     };
   });
 
-  // Get 5 most recent results
-  const recentResults = results.slice(0, 5);
+  // Get 10 most recent results (increased from 5 to show more results)
+  const recentResults = results.slice(0, 10);
 
   return {
     success: true,

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Header } from "@/components/layout/Header";
 import {
   Card,
@@ -17,105 +18,115 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
-
-const stats = [
-  {
-    title: "Total Students",
-    value: "1,234",
-    change: "+12%",
-    trend: "up",
-    icon: Users,
-    color: "text-blue-600",
-    bg: "bg-blue-100",
-  },
-  {
-    title: "Vivas Completed",
-    value: "892",
-    change: "+8%",
-    trend: "up",
-    icon: ClipboardCheck,
-    color: "text-green-600",
-    bg: "bg-green-100",
-  },
-  {
-    title: "Average Score",
-    value: "78%",
-    change: "+5%",
-    trend: "up",
-    icon: TrendingUp,
-    color: "text-purple-600",
-    bg: "bg-purple-100",
-  },
-  {
-    title: "Pending Vivas",
-    value: "342",
-    change: "-3%",
-    trend: "down",
-    icon: Clock,
-    color: "text-orange-600",
-    bg: "bg-orange-100",
-  },
-];
-
-const recentResults = [
-  {
-    id: 1,
-    student: "Rahul Sharma",
-    subject: "Data Structures",
-    score: 85,
-    date: "2026-01-05",
-    status: "passed",
-  },
-  {
-    id: 2,
-    student: "Priya Patel",
-    subject: "DBMS",
-    score: 72,
-    date: "2026-01-05",
-    status: "passed",
-  },
-  {
-    id: 3,
-    student: "Amit Kumar",
-    subject: "Operating Systems",
-    score: 45,
-    date: "2026-01-04",
-    status: "failed",
-  },
-  {
-    id: 4,
-    student: "Sneha Gupta",
-    subject: "Computer Networks",
-    score: 91,
-    date: "2026-01-04",
-    status: "passed",
-  },
-  {
-    id: 5,
-    student: "Vikram Singh",
-    subject: "Data Structures",
-    score: 68,
-    date: "2026-01-04",
-    status: "passed",
-  },
-];
-
-const subjectPerformance = [
-  { subject: "Data Structures", avgScore: 76, students: 312 },
-  { subject: "DBMS", avgScore: 72, students: 289 },
-  { subject: "Operating Systems", avgScore: 68, students: 245 },
-  { subject: "Computer Networks", avgScore: 74, students: 278 },
-];
+import type { VivaResult } from "@/lib/types/viva";
 
 export default function DashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalVivas: 0,
+    totalPassed: 0,
+    totalFailed: 0,
+    avgScore: 0,
+    subjectStats: {} as Record<string, { count: number; avgScore: number; passRate: number }>,
+    recentResults: [] as VivaResult[],
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch("/api/stats");
+        const data = await response.json();
+
+        if (response.ok && data.success && data.data) {
+          setStats(data.data);
+        }
+      } catch (error) {
+        console.error("Error fetching stats:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
+  // Format stats for display
+  const statsDisplay = [
+    {
+      title: "Total Students",
+      value: stats.recentResults.length > 0 
+        ? new Set(stats.recentResults.map(r => r.studentEmail)).size.toString()
+        : "0",
+      change: "",
+      trend: "up" as const,
+      icon: Users,
+      color: "text-blue-600",
+      bg: "bg-blue-100",
+    },
+    {
+      title: "Vivas Completed",
+      value: stats.totalVivas.toString(),
+      change: "",
+      trend: "up" as const,
+      icon: ClipboardCheck,
+      color: "text-green-600",
+      bg: "bg-green-100",
+    },
+    {
+      title: "Average Score",
+      value: `${stats.avgScore}%`,
+      change: "",
+      trend: "up" as const,
+      icon: TrendingUp,
+      color: "text-purple-600",
+      bg: "bg-purple-100",
+    },
+    {
+      title: "Pass Rate",
+      value: stats.totalVivas > 0
+        ? `${Math.round((stats.totalPassed / stats.totalVivas) * 100)}%`
+        : "0%",
+      change: "",
+      trend: stats.totalPassed >= stats.totalFailed ? "up" as const : "down" as const,
+      icon: Clock,
+      color: "text-orange-600",
+      bg: "bg-orange-100",
+    },
+  ];
+
+  // Format recent results (show up to 10)
+  const recentResults = stats.recentResults.slice(0, 10).map((result) => ({
+    id: result.id,
+    student: result.studentName,
+    subject: result.subject,
+    score: result.score,
+    date: result.timestamp,
+    status: result.score >= 50 ? ("passed" as const) : ("failed" as const),
+  }));
+
+  // Format subject performance
+  const subjectPerformance = Object.entries(stats.subjectStats)
+    .map(([subject, data]) => ({
+      subject,
+      avgScore: data.avgScore,
+      students: data.count,
+    }))
+    .sort((a, b) => b.avgScore - a.avgScore)
+    .slice(0, 4);
   return (
     <>
       <Header title="Dashboard" description="Welcome back! Here's an overview of your viva examinations." />
 
       <div className="p-6 space-y-6">
-        {/* Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat, index) => (
+        {loading ? (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">Loading dashboard data...</p>
+          </div>
+        ) : (
+          <>
+            {/* Stats Grid */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {statsDisplay.map((stat, index) => (
             <Card
               key={stat.title}
               className="animate-fade-in-up hover:shadow-lg transition-shadow"
@@ -147,21 +158,26 @@ export default function DashboardPage() {
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
+              ))}
+            </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Recent Results */}
-          <Card className="animate-fade-in-up stagger-2">
-            <CardHeader>
-              <CardTitle>Recent Viva Results</CardTitle>
-              <CardDescription>
-                Latest examination results from your students
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {recentResults.map((result) => (
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Recent Results */}
+              <Card className="animate-fade-in-up stagger-2">
+                <CardHeader>
+                  <CardTitle>Recent Viva Results</CardTitle>
+                  <CardDescription>
+                    Latest examination results from your students
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {recentResults.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      No results yet
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {recentResults.map((result) => (
                   <div
                     key={result.id}
                     className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors"
@@ -188,24 +204,30 @@ export default function DashboardPage() {
                       >
                         {result.score}%
                       </Badge>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-          {/* Subject Performance */}
-          <Card className="animate-fade-in-up stagger-3">
-            <CardHeader>
-              <CardTitle>Subject Performance</CardTitle>
-              <CardDescription>
-                Average scores across different subjects
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {subjectPerformance.map((subject) => (
+              {/* Subject Performance */}
+              <Card className="animate-fade-in-up stagger-3">
+                <CardHeader>
+                  <CardTitle>Subject Performance</CardTitle>
+                  <CardDescription>
+                    Average scores across different subjects
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {subjectPerformance.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      No subject data available
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {subjectPerformance.map((subject) => (
                   <div key={subject.subject} className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="font-medium">{subject.subject}</span>
@@ -223,13 +245,16 @@ export default function DashboardPage() {
                       <span className="text-sm font-semibold w-12 text-right">
                         {subject.avgScore}%
                       </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        )}
 
         {/* Quick Actions */}
         <Card className="animate-fade-in-up stagger-4">
