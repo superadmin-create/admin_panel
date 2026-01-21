@@ -46,11 +46,15 @@ const VIVA_RESULTS_SHEET_ID = process.env.GOOGLE_SHEET_ID || "";
 let connectionSettings: any;
 
 async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
+  if (connectionSettings && connectionSettings.settings?.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
     return connectionSettings.settings.access_token;
   }
   
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+  if (!hostname) {
+    throw new Error('Google Sheets connection not configured. Please set up the Google Sheets integration.');
+  }
+
   const xReplitToken = process.env.REPL_IDENTITY 
     ? 'repl ' + process.env.REPL_IDENTITY 
     : process.env.WEB_REPL_RENEWAL 
@@ -58,25 +62,40 @@ async function getAccessToken() {
     : null;
 
   if (!xReplitToken) {
-    throw new Error('Replit authentication token not found');
+    throw new Error('Replit authentication token not found. Please ensure you are running this in Replit.');
   }
 
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-sheet',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
+  try {
+    const response = await fetch(
+      'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-sheet',
+      {
+        headers: {
+          'Accept': 'application/json',
+          'X_REPLIT_TOKEN': xReplitToken
+        }
       }
+    );
+    
+    const data = await response.json();
+    connectionSettings = data.items?.[0];
+
+    if (!connectionSettings) {
+      throw new Error('Google Sheet connection not found. Please reconnect your Google account in the Integrations panel.');
     }
-  ).then(res => res.json()).then(data => data.items?.[0]);
 
-  const accessToken = connectionSettings?.settings?.access_token || connectionSettings.settings?.oauth?.credentials?.access_token;
+    const accessToken = connectionSettings?.settings?.access_token || connectionSettings?.settings?.oauth?.credentials?.access_token;
 
-  if (!connectionSettings || !accessToken) {
-    throw new Error('Google Sheet not connected');
+    if (!accessToken) {
+      throw new Error('Google Sheet access token not available. Please reconnect your Google account.');
+    }
+    
+    return accessToken;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error('Failed to connect to Google Sheets. Please check your connection.');
   }
-  return accessToken;
 }
 
 async function getGoogleSheetsClient() {
