@@ -1,7 +1,7 @@
-# AI Viva Admin Panel
+# AI Viva Admin Panel (Teacher Portal)
 
 ## Overview
-A Next.js admin panel application for the AI Viva teacher portal. This is a TypeScript-based web application using:
+The teacher-facing admin panel for AI Viva. This works alongside a separate student-facing app (ai-viva). This is a TypeScript-based web application using:
 - Next.js 14 (App Router)
 - React 18
 - Tailwind CSS
