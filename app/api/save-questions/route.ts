@@ -1,49 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { saveQuestionsToSheets } from "@/lib/api/save-questions";
-import { google } from "googleapis";
+import { STUDENT_DATA_SHEET_ID, getGoogleSheetsClient } from "@/lib/api/sheets";
 
 const SUBJECTS_SHEET_NAME = "Subjects";
 
-function getSheetsConfig() {
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
-  const clientEmail =
-    process.env.GOOGLE_CLIENT_EMAIL || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const sheetId = process.env.GOOGLE_SHEET_ID;
-
-  if (!privateKey || !clientEmail || !sheetId) {
-    return null;
-  }
-
-  return {
-    privateKey: privateKey.replace(/\\n/g, "\n"),
-    clientEmail,
-    sheetId,
-  };
-}
-
 async function ensureSubjectExists(subjectName: string): Promise<void> {
-  const config = getSheetsConfig();
-  if (!config) return;
-
   try {
-    const auth = new google.auth.JWT({
-      email: config.clientEmail,
-      key: config.privateKey,
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-    });
+    const sheets = await getGoogleSheetsClient();
 
-    const sheets = google.sheets({ version: "v4", auth });
-
-    // First, ensure the Subjects sheet exists
     try {
       await sheets.spreadsheets.values.get({
-        spreadsheetId: config.sheetId,
+        spreadsheetId: STUDENT_DATA_SHEET_ID,
         range: `'${SUBJECTS_SHEET_NAME}'!A1`,
       });
     } catch {
-      // Sheet doesn't exist, create it with headers
       await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: config.sheetId,
+        spreadsheetId: STUDENT_DATA_SHEET_ID,
         requestBody: {
           requests: [
             {
@@ -56,7 +28,7 @@ async function ensureSubjectExists(subjectName: string): Promise<void> {
       });
 
       await sheets.spreadsheets.values.update({
-        spreadsheetId: config.sheetId,
+        spreadsheetId: STUDENT_DATA_SHEET_ID,
         range: `'${SUBJECTS_SHEET_NAME}'!A1:C1`,
         valueInputOption: "RAW",
         requestBody: {
@@ -65,9 +37,8 @@ async function ensureSubjectExists(subjectName: string): Promise<void> {
       });
     }
 
-    // Check if subject already exists
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       range: `'${SUBJECTS_SHEET_NAME}'!A2:A100`,
     });
 
@@ -76,9 +47,8 @@ async function ensureSubjectExists(subjectName: string): Promise<void> {
     );
 
     if (!existingSubjects.includes(subjectName.toLowerCase())) {
-      // Subject doesn't exist, add it
       await sheets.spreadsheets.values.append({
-        spreadsheetId: config.sheetId,
+        spreadsheetId: STUDENT_DATA_SHEET_ID,
         range: `'${SUBJECTS_SHEET_NAME}'!A:C`,
         valueInputOption: "RAW",
         requestBody: {
@@ -89,7 +59,6 @@ async function ensureSubjectExists(subjectName: string): Promise<void> {
     }
   } catch (error) {
     console.error("[Subjects] Error ensuring subject exists:", error);
-    // Don't throw - this is a secondary operation
   }
 }
 
@@ -105,7 +74,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Save the questions
     const result = await saveQuestionsToSheets({
       subject,
       topics: topics || [],
@@ -120,7 +88,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Also ensure the subject exists in the Subjects sheet
     await ensureSubjectExists(subject);
 
     return NextResponse.json({
@@ -135,4 +102,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

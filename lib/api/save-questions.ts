@@ -3,7 +3,8 @@
  * These questions will be used by the AI Viva app
  */
 
-import { google, Auth } from "googleapis";
+import { google } from "googleapis";
+import { STUDENT_DATA_SHEET_ID, getGoogleSheetsClient } from "./sheets";
 
 interface VivaQuestion {
   id: number;
@@ -23,45 +24,12 @@ interface QuestionSet {
 
 const QUESTIONS_SHEET_NAME = "Viva Questions";
 
-let cachedAuth: Auth.JWT | null = null;
-
-function getSheetsConfig() {
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
-  const clientEmail =
-    process.env.GOOGLE_CLIENT_EMAIL || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const sheetId = process.env.GOOGLE_SHEET_ID;
-
-  if (!privateKey || !clientEmail || !sheetId) {
-    return null;
-  }
-
-  return {
-    privateKey: privateKey.replace(/\\n/g, "\n"),
-    clientEmail,
-    sheetId,
-  };
-}
-
-function getAuthClient(config: { privateKey: string; clientEmail: string }) {
-  if (cachedAuth) return cachedAuth;
-
-  cachedAuth = new google.auth.JWT({
-    email: config.clientEmail,
-    key: config.privateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-
-  return cachedAuth;
-}
-
 async function ensureQuestionsSheet(
-  sheets: ReturnType<typeof google.sheets>,
-  sheetId: string
+  sheets: ReturnType<typeof google.sheets>
 ) {
   try {
-    // Try to create the sheet
     await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       requestBody: {
         requests: [
           {
@@ -77,9 +45,8 @@ async function ensureQuestionsSheet(
     // Sheet already exists
   }
 
-  // Check/create headers
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
+    spreadsheetId: STUDENT_DATA_SHEET_ID,
     range: `'${QUESTIONS_SHEET_NAME}'!A1:G1`,
   });
 
@@ -96,7 +63,7 @@ async function ensureQuestionsSheet(
     ];
 
     await sheets.spreadsheets.values.update({
-      spreadsheetId: sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       range: `'${QUESTIONS_SHEET_NAME}'!A1:G1`,
       valueInputOption: "RAW",
       requestBody: { values: [headers] },
@@ -110,18 +77,11 @@ async function ensureQuestionsSheet(
 export async function saveQuestionsToSheets(
   questionSet: QuestionSet
 ): Promise<{ success: boolean; error?: string }> {
-  const config = getSheetsConfig();
-  if (!config) {
-    return { success: false, error: "Sheets configuration not found" };
-  }
-
   try {
-    const auth = getAuthClient(config);
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = await getGoogleSheetsClient();
 
-    await ensureQuestionsSheet(sheets, config.sheetId);
+    await ensureQuestionsSheet(sheets);
 
-    // Prepare rows - one row per question
     const rows = questionSet.questions.map((q) => [
       questionSet.subject,
       questionSet.topics.join(", "),
@@ -129,11 +89,11 @@ export async function saveQuestionsToSheets(
       q.expectedAnswer,
       q.difficulty,
       questionSet.createdAt,
-      "TRUE", // Active by default
+      "TRUE",
     ]);
 
     await sheets.spreadsheets.values.append({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       range: `'${QUESTIONS_SHEET_NAME}'!A:G`,
       valueInputOption: "RAW",
       insertDataOption: "INSERT_ROWS",
@@ -159,23 +119,16 @@ export async function saveQuestionsToSheets(
 export async function getQuestionsForSubject(
   subject: string
 ): Promise<{ success: boolean; questions?: VivaQuestion[]; error?: string }> {
-  const config = getSheetsConfig();
-  if (!config) {
-    return { success: false, error: "Sheets configuration not found" };
-  }
-
   try {
-    const auth = getAuthClient(config);
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = await getGoogleSheetsClient();
 
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       range: `'${QUESTIONS_SHEET_NAME}'!A2:G1000`,
     });
 
     const rows = response.data.values || [];
 
-    // Filter by subject and active status
     const questions: VivaQuestion[] = rows
       .filter(
         (row) =>
@@ -208,17 +161,11 @@ export async function getAllQuestions(): Promise<{
   data?: Record<string, VivaQuestion[]>;
   error?: string;
 }> {
-  const config = getSheetsConfig();
-  if (!config) {
-    return { success: false, error: "Sheets configuration not found" };
-  }
-
   try {
-    const auth = getAuthClient(config);
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = await getGoogleSheetsClient();
 
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       range: `'${QUESTIONS_SHEET_NAME}'!A2:G1000`,
     });
 
@@ -250,5 +197,3 @@ export async function getAllQuestions(): Promise<{
     };
   }
 }
-
-
