@@ -1,9 +1,9 @@
 /**
  * Google Sheets integration for reading viva results
- * Connects to the same sheet used by ai-viva-main student portal
+ * Uses Replit's Google Sheets connector for OAuth2 authentication
  */
 
-import { google, Auth } from "googleapis";
+import { google } from "googleapis";
 
 // Types for viva results from Google Sheets
 export interface VivaResult {
@@ -39,55 +39,55 @@ export interface TeacherCredentials {
   lastName: string;
 }
 
-interface GoogleSheetsConfig {
-  privateKey: string;
-  clientEmail: string;
-  sheetId: string;
-}
-
-// Cache the auth client
-let cachedAuth: Auth.JWT | null = null;
-
 const SHEET_NAME = "Viva Results";
+const TEACHER_SHEET_ID = "1or1TVnD6Py-gZ1dSP25CJjwufDeQ_Pi-s1tKls3lq_0";
+const VIVA_RESULTS_SHEET_ID = process.env.GOOGLE_SHEET_ID || "";
 
-/**
- * Get Google Sheets configuration from environment variables
- */
-function getSheetsConfig(): GoogleSheetsConfig | null {
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
-  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-  const sheetId = process.env.GOOGLE_SHEET_ID;
+let connectionSettings: any;
 
-  if (!privateKey || !clientEmail || !sheetId) {
-    console.warn("[Sheets] Google Sheets configuration not found");
-    return null;
+async function getAccessToken() {
+  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
+    return connectionSettings.settings.access_token;
+  }
+  
+  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+  const xReplitToken = process.env.REPL_IDENTITY 
+    ? 'repl ' + process.env.REPL_IDENTITY 
+    : process.env.WEB_REPL_RENEWAL 
+    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
+    : null;
+
+  if (!xReplitToken) {
+    throw new Error('Replit authentication token not found');
   }
 
-  // Unescape newlines in private key
-  const unescapedKey = privateKey.replace(/\\n/g, "\n");
+  connectionSettings = await fetch(
+    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-sheet',
+    {
+      headers: {
+        'Accept': 'application/json',
+        'X_REPLIT_TOKEN': xReplitToken
+      }
+    }
+  ).then(res => res.json()).then(data => data.items?.[0]);
 
-  return {
-    privateKey: unescapedKey,
-    clientEmail,
-    sheetId,
-  };
+  const accessToken = connectionSettings?.settings?.access_token || connectionSettings.settings?.oauth?.credentials?.access_token;
+
+  if (!connectionSettings || !accessToken) {
+    throw new Error('Google Sheet not connected');
+  }
+  return accessToken;
 }
 
-/**
- * Get authenticated Google Sheets client
- */
-function getAuthClient(config: GoogleSheetsConfig) {
-  if (cachedAuth) {
-    return cachedAuth;
-  }
+async function getGoogleSheetsClient() {
+  const accessToken = await getAccessToken();
 
-  cachedAuth = new google.auth.JWT({
-    email: config.clientEmail,
-    key: config.privateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+  const oauth2Client = new google.auth.OAuth2();
+  oauth2Client.setCredentials({
+    access_token: accessToken
   });
 
-  return cachedAuth;
+  return google.sheets({ version: 'v4', auth: oauth2Client });
 }
 
 /**
@@ -99,7 +99,6 @@ function parseScore(scoreStr: string): number {
   if (match) {
     return parseInt(match[1], 10);
   }
-  // Try parsing as plain number
   const num = parseInt(scoreStr, 10);
   return isNaN(num) ? 0 : num;
 }
@@ -112,18 +111,15 @@ export async function fetchVivaResults(): Promise<{
   data?: VivaResult[];
   error?: string;
 }> {
-  const config = getSheetsConfig();
-  if (!config) {
-    return { success: false, error: "Sheets configuration not found" };
+  if (!VIVA_RESULTS_SHEET_ID) {
+    return { success: false, error: "GOOGLE_SHEET_ID environment variable not set" };
   }
 
   try {
-    const auth = getAuthClient(config);
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = await getGoogleSheetsClient();
 
-    // Fetch all data from the sheet
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: VIVA_RESULTS_SHEET_ID,
       range: `'${SHEET_NAME}'!A:J`,
     });
 
@@ -132,7 +128,6 @@ export async function fetchVivaResults(): Promise<{
       return { success: true, data: [] };
     }
 
-    // Skip header row and parse data
     const results: VivaResult[] = rows.slice(1).map((row, index) => {
       const score = parseScore(row[6] || "0");
       return {
@@ -151,7 +146,6 @@ export async function fetchVivaResults(): Promise<{
       };
     });
 
-    // Sort by date (newest first)
     results.sort((a, b) => {
       const dateA = new Date(a.dateTime);
       const dateB = new Date(b.dateTime);
@@ -184,7 +178,6 @@ export async function fetchStudentSummaries(): Promise<{
 
   const results = resultsResponse.data;
 
-  // Group by email
   const studentMap = new Map<
     string,
     {
@@ -212,13 +205,11 @@ export async function fetchStudentSummaries(): Promise<{
     student.scores.push(result.score);
     student.subjects.add(result.subject);
 
-    // Update last date if this is more recent
     if (!student.lastDate || result.dateTime > student.lastDate) {
       student.lastDate = result.dateTime;
     }
   });
 
-  // Convert to array
   const students: StudentSummary[] = Array.from(studentMap.entries()).map(
     ([email, data], index) => {
       const avgScore =
@@ -248,7 +239,6 @@ export async function fetchStudentSummaries(): Promise<{
     }
   );
 
-  // Sort by last viva date (most recent first)
   students.sort((a, b) => {
     if (!a.lastVivaDate) return 1;
     if (!b.lastVivaDate) return -1;
@@ -261,27 +251,15 @@ export async function fetchStudentSummaries(): Promise<{
 /**
  * Fetch teacher credentials from Google Sheets (READ-ONLY)
  * Sheet ID: 1or1TVnD6Py-gZ1dSP25CJjwufDeQ_Pi-s1tKls3lq_0
- * This function only reads data from the sheet - it does not edit or modify the sheet.
  */
 export async function fetchTeacherCredentials(): Promise<{
   success: boolean;
   data?: TeacherCredentials[];
   error?: string;
 }> {
-  const config = getSheetsConfig();
-  if (!config) {
-    return { success: false, error: "Sheets configuration not found" };
-  }
-
-  // Teacher credentials sheet ID
-  const TEACHER_SHEET_ID = "1or1TVnD6Py-gZ1dSP25CJjwufDeQ_Pi-s1tKls3lq_0";
-
   try {
-    // Use read-only authentication (already configured in getAuthClient)
-    const auth = getAuthClient(config);
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = await getGoogleSheetsClient();
 
-    // READ-ONLY: Get the sheet metadata to find the first sheet name
     const spreadsheet = await sheets.spreadsheets.get({
       spreadsheetId: TEACHER_SHEET_ID,
     });
@@ -289,7 +267,6 @@ export async function fetchTeacherCredentials(): Promise<{
     const sheetName =
       spreadsheet.data.sheets?.[0]?.properties?.title || "Sheet1";
 
-    // READ-ONLY: Fetch username (column A), password (column B), firstName (column C), lastName (column D)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: TEACHER_SHEET_ID,
       range: `'${sheetName}'!A:D`,
@@ -300,7 +277,6 @@ export async function fetchTeacherCredentials(): Promise<{
       return { success: false, error: "No teacher credentials found in sheet" };
     }
 
-    // Skip header row and parse credentials
     const credentials: TeacherCredentials[] = rows
       .slice(1)
       .map((row) => {
@@ -311,7 +287,7 @@ export async function fetchTeacherCredentials(): Promise<{
           lastName: (row[3] || "").trim(),
         };
       })
-      .filter((cred) => cred.username && cred.password); // Filter out empty rows
+      .filter((cred) => cred.username && cred.password);
 
     if (credentials.length === 0) {
       return {
@@ -326,19 +302,7 @@ export async function fetchTeacherCredentials(): Promise<{
     let errorMessage = "Unknown error";
     if (error instanceof Error) {
       errorMessage = error.message;
-      // Provide more helpful error messages
-      if (
-        errorMessage.includes("PERMISSION_DENIED") ||
-        errorMessage.includes("does not have permission") ||
-        errorMessage.includes("permission")
-      ) {
-        errorMessage = `Permission denied. Please share the Google Sheet with your service account: ${config.clientEmail}. Open: https://docs.google.com/spreadsheets/d/${TEACHER_SHEET_ID}/edit and share with Viewer access.`;
-      } else if (errorMessage.includes("NOT_FOUND")) {
-        errorMessage = `Teacher credentials sheet not found. Please verify the sheet ID: ${TEACHER_SHEET_ID}`;
-      }
     }
     return { success: false, error: errorMessage };
   }
 }
-
-
