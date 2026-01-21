@@ -1,63 +1,78 @@
 /**
  * Google Sheets integration for reading viva results
- * This fetches data from the same Google Sheet used by ai-viva-main
+ * Uses Replit's Google Sheets connector for OAuth2 authentication
  */
 
-import { google, Auth } from "googleapis";
+import { google } from "googleapis";
 import type { VivaResult, VivaEvaluation } from "@/lib/types/viva";
 
-interface GoogleSheetsConfig {
-  privateKey: string;
-  clientEmail: string;
-  sheetId: string;
-}
-
-// Cache the auth client
-let cachedAuth: Auth.JWT | null = null;
-
 const SHEET_NAME = "Viva Results";
+const STUDENT_DATA_SHEET_ID = "1dPderiJxJl534xNnzHVVqye9VSx3zZY3ZEgO3vjqpFY";
 
-/**
- * Get Google Sheets configuration from environment variables
- */
-function getSheetsConfig(): GoogleSheetsConfig | null {
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
-  const clientEmail =
-    process.env.GOOGLE_CLIENT_EMAIL || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const sheetId = process.env.GOOGLE_SHEET_ID;
+let connectionSettings: any;
 
-  if (!privateKey || !clientEmail || !sheetId) {
-    console.warn(
-      "[Sheets] Google Sheets configuration not found. Required: GOOGLE_PRIVATE_KEY, GOOGLE_CLIENT_EMAIL, GOOGLE_SHEET_ID"
-    );
-    return null;
+async function getAccessToken() {
+  if (connectionSettings && connectionSettings.settings?.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
+    return connectionSettings.settings.access_token;
+  }
+  
+  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+  if (!hostname) {
+    throw new Error('Google Sheets connection not configured. Please set up the Google Sheets integration.');
   }
 
-  // Unescape newlines in private key
-  const unescapedKey = privateKey.replace(/\\n/g, "\n");
+  const xReplitToken = process.env.REPL_IDENTITY 
+    ? 'repl ' + process.env.REPL_IDENTITY 
+    : process.env.WEB_REPL_RENEWAL 
+    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
+    : null;
 
-  return {
-    privateKey: unescapedKey,
-    clientEmail,
-    sheetId,
-  };
+  if (!xReplitToken) {
+    throw new Error('Replit authentication token not found.');
+  }
+
+  try {
+    const response = await fetch(
+      'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-sheet',
+      {
+        headers: {
+          'Accept': 'application/json',
+          'X_REPLIT_TOKEN': xReplitToken
+        }
+      }
+    );
+    
+    const data = await response.json();
+    connectionSettings = data.items?.[0];
+
+    if (!connectionSettings) {
+      throw new Error('Google Sheet connection not found. Please reconnect your Google account.');
+    }
+
+    const accessToken = connectionSettings?.settings?.access_token || connectionSettings?.settings?.oauth?.credentials?.access_token;
+
+    if (!accessToken) {
+      throw new Error('Google Sheet access token not available. Please reconnect your Google account.');
+    }
+    
+    return accessToken;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error('Failed to connect to Google Sheets.');
+  }
 }
 
-/**
- * Get authenticated Google Sheets client
- */
-function getAuthClient(config: GoogleSheetsConfig) {
-  if (cachedAuth) {
-    return cachedAuth;
-  }
+async function getGoogleSheetsClient() {
+  const accessToken = await getAccessToken();
 
-  cachedAuth = new google.auth.JWT({
-    email: config.clientEmail,
-    key: config.privateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+  const oauth2Client = new google.auth.OAuth2();
+  oauth2Client.setCredentials({
+    access_token: accessToken
   });
 
-  return cachedAuth;
+  return google.sheets({ version: 'v4', auth: oauth2Client });
 }
 
 /**
@@ -86,48 +101,27 @@ export async function getVivaResults(): Promise<{
   data?: VivaResult[];
   error?: string;
 }> {
-  const config = getSheetsConfig();
-  if (!config) {
-    return { success: false, error: "Sheets configuration not found" };
-  }
-
   try {
-    const auth = getAuthClient(config);
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = await getGoogleSheetsClient();
 
-    // Fetch all data from the sheet (skip header row)
-    // Use a large range to get all rows, or use A2:K to get all rows dynamically
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: config.sheetId,
-      range: `'${SHEET_NAME}'!A2:K`, // Skip header, get all rows (including evaluation column K)
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
+      range: `'${SHEET_NAME}'!A2:K`,
     });
 
     const rows = response.data.values || [];
 
-    // Convert rows to VivaResult objects
-    // Sheet columns: Date & Time, Student Name, Email, Subject, Topics, Questions Answered, Score, Overall Feedback, Transcript, Recording, Evaluation (JSON)
     const results: VivaResult[] = rows.map((row, index) => {
-      // Try to parse evaluation from row[10] if it exists (column K, index 10)
       let evaluation: VivaEvaluation | null = null;
       try {
-        // Check if there's an evaluation column (column K, index 10)
         if (row[10] && row[10].trim()) {
           const evalStr = row[10].trim();
-          // Handle both string JSON and already parsed objects
           if (evalStr.startsWith('{') || evalStr.startsWith('[')) {
             evaluation = JSON.parse(evalStr);
-            // Log successful parsing for debugging (only in development)
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`[Sheets] Successfully parsed evaluation for row ${index + 2}, student: ${row[1] || 'Unknown'}`);
-            }
           }
-        } else if (process.env.NODE_ENV === 'development') {
-          console.log(`[Sheets] No evaluation data found in column K for row ${index + 2}`);
         }
       } catch (error) {
-        // Log parsing errors for debugging
-        console.warn(`[Sheets] Failed to parse evaluation JSON for row ${index + 2}:`, error instanceof Error ? error.message : String(error));
-        console.warn(`[Sheets] Evaluation data (first 200 chars):`, row[10]?.substring(0, 200));
+        console.warn(`[Sheets] Failed to parse evaluation JSON for row ${index + 2}`);
       }
 
       return {
@@ -146,23 +140,15 @@ export async function getVivaResults(): Promise<{
       };
     });
 
-    // Sort by timestamp descending (most recent first)
-    // Handle both ISO format and formatted string timestamps
-    // Normalize all timestamps to local time for accurate comparison
     results.sort((a, b) => {
       const parseTimestamp = (ts: string): number => {
         if (!ts) return 0;
         
-        // Try ISO format first (e.g., "2026-01-15T10:11:35.724Z")
-        // ISO timestamps are in UTC, so we convert to local time
         if (ts.includes('T') && (ts.includes('Z') || ts.includes('+'))) {
           const date = new Date(ts);
-          // Return local time in milliseconds for comparison
           return date.getTime();
         }
         
-        // Try formatted string (e.g., "15 Jan 2026, 10:41 am")
-        // These are already in local time
         const formattedMatch = ts.match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(am|pm)/i);
         if (formattedMatch) {
           const [, day, month, year, hour, minute, ampm] = formattedMatch;
@@ -183,7 +169,6 @@ export async function getVivaResults(): Promise<{
           return date.getTime();
         }
         
-        // Fallback to standard Date parsing
         const parsed = new Date(ts);
         return isNaN(parsed.getTime()) ? 0 : parsed.getTime();
       };
@@ -198,13 +183,6 @@ export async function getVivaResults(): Promise<{
     let errorMessage = "Unknown error";
     if (error instanceof Error) {
       errorMessage = error.message;
-      if (errorMessage.includes("invalid_grant")) {
-        errorMessage = "Authentication failed - check credentials";
-      } else if (errorMessage.includes("not found")) {
-        errorMessage = "Spreadsheet not found";
-      } else if (errorMessage.includes("permission")) {
-        errorMessage = "Permission denied";
-      }
     }
 
     return { success: false, error: errorMessage };
@@ -236,7 +214,7 @@ export async function getVivaStats(): Promise<{
   }
 
   const results = resultsResponse.data;
-  const passingScore = 50; // 50% is passing
+  const passingScore = 50;
 
   const totalVivas = results.length;
   const totalPassed = results.filter((r) => r.score >= passingScore).length;
@@ -246,7 +224,6 @@ export async function getVivaStats(): Promise<{
       ? Math.round(results.reduce((sum, r) => sum + r.score, 0) / totalVivas)
       : 0;
 
-  // Calculate per-subject statistics
   const subjectMap = new Map<
     string,
     { scores: number[]; passed: number; count: number }
@@ -284,7 +261,6 @@ export async function getVivaStats(): Promise<{
     };
   });
 
-  // Get 10 most recent results (increased from 5 to show more results)
   const recentResults = results.slice(0, 10);
 
   return {
@@ -365,4 +341,4 @@ export async function getStudentsFromResults(): Promise<{
   return { success: true, data: students };
 }
 
-
+export { STUDENT_DATA_SHEET_ID, getGoogleSheetsClient };

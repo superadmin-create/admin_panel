@@ -1,65 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { google } from "googleapis";
+import { STUDENT_DATA_SHEET_ID, getGoogleSheetsClient } from "@/lib/api/sheets";
 
 const TOPICS_SHEET_NAME = "Topics";
 
-function getSheetsConfig() {
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
-  const clientEmail =
-    process.env.GOOGLE_CLIENT_EMAIL || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const sheetId = process.env.GOOGLE_SHEET_ID;
-
-  if (!privateKey || !clientEmail || !sheetId) {
-    return null;
-  }
-
-  return {
-    privateKey: privateKey.replace(/\\n/g, "\n"),
-    clientEmail,
-    sheetId,
-  };
-}
-
-function getAuthClient(config: { privateKey: string; clientEmail: string }) {
-  return new google.auth.JWT({
-    email: config.clientEmail,
-    key: config.privateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-}
-
-// GET - Fetch all topics (optionally filtered by subject)
 export async function GET(request: NextRequest) {
-  const config = getSheetsConfig();
-  if (!config) {
-    return NextResponse.json(
-      { success: false, error: "Google Sheets not configured" },
-      { status: 500 }
-    );
-  }
-
   try {
     const { searchParams } = new URL(request.url);
     const subjectFilter = searchParams.get("subject");
 
-    const auth = getAuthClient(config);
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = await getGoogleSheetsClient();
 
-    // Try to get topics from the Topics sheet
     let response;
     try {
       response = await sheets.spreadsheets.values.get({
-        spreadsheetId: config.sheetId,
+        spreadsheetId: STUDENT_DATA_SHEET_ID,
         range: `'${TOPICS_SHEET_NAME}'!A2:C100`,
       });
     } catch {
-      // Sheet doesn't exist, return empty list
       return NextResponse.json({ success: true, topics: [] });
     }
 
     const rows = response.data.values || [];
 
-    // Column format: Subject, Topic Name, Status
     let topics = rows
       .filter((row) => row[0] && row[1] && (row[2] === "active" || !row[2]))
       .map((row, index) => ({
@@ -69,7 +31,6 @@ export async function GET(request: NextRequest) {
         status: row[2] || "active",
       }));
 
-    // Filter by subject if provided
     if (subjectFilter) {
       topics = topics.filter(
         (t) => t.subject.toLowerCase() === subjectFilter.toLowerCase()
@@ -79,23 +40,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, topics });
   } catch (error: unknown) {
     console.error("[Topics API] Error fetching topics:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: "Failed to fetch topics" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
 }
 
-// POST - Add a new topic
 export async function POST(request: NextRequest) {
-  const config = getSheetsConfig();
-  if (!config) {
-    return NextResponse.json(
-      { success: false, error: "Google Sheets not configured" },
-      { status: 500 }
-    );
-  }
-
   try {
     const body = await request.json();
     const { subject, name } = body;
@@ -107,19 +60,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const auth = getAuthClient(config);
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = await getGoogleSheetsClient();
 
-    // First, ensure the Topics sheet exists
     try {
       await sheets.spreadsheets.values.get({
-        spreadsheetId: config.sheetId,
+        spreadsheetId: STUDENT_DATA_SHEET_ID,
         range: `'${TOPICS_SHEET_NAME}'!A1`,
       });
     } catch {
-      // Sheet doesn't exist, create it with headers
       await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: config.sheetId,
+        spreadsheetId: STUDENT_DATA_SHEET_ID,
         requestBody: {
           requests: [
             {
@@ -133,9 +83,8 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Add headers
       await sheets.spreadsheets.values.update({
-        spreadsheetId: config.sheetId,
+        spreadsheetId: STUDENT_DATA_SHEET_ID,
         range: `'${TOPICS_SHEET_NAME}'!A1:C1`,
         valueInputOption: "RAW",
         requestBody: {
@@ -144,9 +93,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Check if topic already exists for this subject
     const existingResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       range: `'${TOPICS_SHEET_NAME}'!A2:B100`,
     });
 
@@ -164,9 +112,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Append the new topic
     await sheets.spreadsheets.values.append({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       range: `'${TOPICS_SHEET_NAME}'!A:C`,
       valueInputOption: "RAW",
       requestBody: {
@@ -174,31 +121,21 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log(`[Topics API] Added topic "${name}" for subject "${subject}"`);
-
     return NextResponse.json({
       success: true,
       message: "Topic added successfully",
     });
   } catch (error) {
     console.error("[Topics API] Error adding topic:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: "Failed to add topic" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
 }
 
-// DELETE - Remove a topic
 export async function DELETE(request: NextRequest) {
-  const config = getSheetsConfig();
-  if (!config) {
-    return NextResponse.json(
-      { success: false, error: "Google Sheets not configured" },
-      { status: 500 }
-    );
-  }
-
   try {
     const { searchParams } = new URL(request.url);
     const subject = searchParams.get("subject");
@@ -211,12 +148,10 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const auth = getAuthClient(config);
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = await getGoogleSheetsClient();
 
-    // Get all topics to find the row to delete
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       range: `'${TOPICS_SHEET_NAME}'!A2:C100`,
     });
 
@@ -234,9 +169,8 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Get sheet ID
     const spreadsheet = await sheets.spreadsheets.get({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
     });
 
     const topicsSheet = spreadsheet.data.sheets?.find(
@@ -250,9 +184,8 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Delete the row
     await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       requestBody: {
         requests: [
           {
@@ -260,7 +193,7 @@ export async function DELETE(request: NextRequest) {
               range: {
                 sheetId: topicsSheet.properties.sheetId,
                 dimension: "ROWS",
-                startIndex: rowIndex + 1, // +1 for header
+                startIndex: rowIndex + 1,
                 endIndex: rowIndex + 2,
               },
             },
@@ -275,23 +208,15 @@ export async function DELETE(request: NextRequest) {
     });
   } catch (error) {
     console.error("[Topics API] Error deleting topic:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: "Failed to delete topic" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
 }
 
-// PUT - Update a topic
 export async function PUT(request: NextRequest) {
-  const config = getSheetsConfig();
-  if (!config) {
-    return NextResponse.json(
-      { success: false, error: "Google Sheets not configured" },
-      { status: 500 }
-    );
-  }
-
   try {
     const body = await request.json();
     const { oldSubject, oldName, newSubject, newName } = body;
@@ -310,12 +235,10 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const auth = getAuthClient(config);
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = await getGoogleSheetsClient();
 
-    // Get all topics to find the row to update
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       range: `'${TOPICS_SHEET_NAME}'!A2:C100`,
     });
 
@@ -333,7 +256,6 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Check if the new topic name already exists for the new subject (if different)
     if (oldSubject !== newSubject || oldName !== newName) {
       const exists = rows.some(
         (row) =>
@@ -350,10 +272,9 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // Update the row (rowIndex + 2 because of 0-index and header row)
     const updateRow = rowIndex + 2;
     await sheets.spreadsheets.values.update({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       range: `'${TOPICS_SHEET_NAME}'!A${updateRow}:C${updateRow}`,
       valueInputOption: "RAW",
       requestBody: {
@@ -364,11 +285,10 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ success: true, message: "Topic updated successfully" });
   } catch (error) {
     console.error("[Topics API] Error updating topic:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: "Failed to update topic" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
 }
-
-

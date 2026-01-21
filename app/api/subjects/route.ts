@@ -1,58 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { google } from "googleapis";
+import { STUDENT_DATA_SHEET_ID, getGoogleSheetsClient } from "@/lib/api/sheets";
 
 const SUBJECTS_SHEET_NAME = "Subjects";
 
-function getSheetsConfig() {
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
-  const clientEmail =
-    process.env.GOOGLE_CLIENT_EMAIL || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const sheetId = process.env.GOOGLE_SHEET_ID;
-
-  if (!privateKey || !clientEmail || !sheetId) {
-    return null;
-  }
-
-  return {
-    privateKey: privateKey.replace(/\\n/g, "\n"),
-    clientEmail,
-    sheetId,
-  };
-}
-
-function getAuthClient(config: { privateKey: string; clientEmail: string }) {
-  return new google.auth.JWT({
-    email: config.clientEmail,
-    key: config.privateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-}
-
-// GET - Fetch all subjects
 export async function GET() {
-  const config = getSheetsConfig();
-  if (!config) {
-    return NextResponse.json(
-      { success: false, error: "Google Sheets not configured" },
-      { status: 500 }
-    );
-  }
-
   try {
-    const auth = getAuthClient(config);
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = await getGoogleSheetsClient();
 
-    // Try to get subjects from the Subjects sheet
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       range: `'${SUBJECTS_SHEET_NAME}'!A2:C100`,
     });
 
     const rows = response.data.values || [];
     
-    // Column format: Name, Code, Status
     const subjects = rows
-      .filter((row) => row[0]) // Filter out empty rows
+      .filter((row) => row[0])
       .map((row, index) => ({
         id: index + 1,
         name: row[0] || "",
@@ -64,29 +27,19 @@ export async function GET() {
   } catch (error: unknown) {
     console.error("[Subjects API] Error fetching subjects:", error);
     
-    // If sheet doesn't exist, return empty list
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     if (errorMessage.includes("Unable to parse range")) {
       return NextResponse.json({ success: true, subjects: [] });
     }
     
     return NextResponse.json(
-      { success: false, error: "Failed to fetch subjects" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
 }
 
-// POST - Add a new subject
 export async function POST(request: NextRequest) {
-  const config = getSheetsConfig();
-  if (!config) {
-    return NextResponse.json(
-      { success: false, error: "Google Sheets not configured" },
-      { status: 500 }
-    );
-  }
-
   try {
     const body = await request.json();
     const { name, code } = body;
@@ -98,19 +51,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const auth = getAuthClient(config);
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = await getGoogleSheetsClient();
 
-    // First, ensure the Subjects sheet exists
     try {
       await sheets.spreadsheets.values.get({
-        spreadsheetId: config.sheetId,
+        spreadsheetId: STUDENT_DATA_SHEET_ID,
         range: `'${SUBJECTS_SHEET_NAME}'!A1`,
       });
     } catch {
-      // Sheet doesn't exist, create it with headers
       await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: config.sheetId,
+        spreadsheetId: STUDENT_DATA_SHEET_ID,
         requestBody: {
           requests: [
             {
@@ -124,9 +74,8 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Add headers
       await sheets.spreadsheets.values.update({
-        spreadsheetId: config.sheetId,
+        spreadsheetId: STUDENT_DATA_SHEET_ID,
         range: `'${SUBJECTS_SHEET_NAME}'!A1:C1`,
         valueInputOption: "RAW",
         requestBody: {
@@ -135,9 +84,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Append the new subject
     await sheets.spreadsheets.values.append({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       range: `'${SUBJECTS_SHEET_NAME}'!A:C`,
       valueInputOption: "RAW",
       requestBody: {
@@ -148,23 +96,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, message: "Subject added successfully" });
   } catch (error) {
     console.error("[Subjects API] Error adding subject:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: "Failed to add subject" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
 }
 
-// DELETE - Remove a subject
 export async function DELETE(request: NextRequest) {
-  const config = getSheetsConfig();
-  if (!config) {
-    return NextResponse.json(
-      { success: false, error: "Google Sheets not configured" },
-      { status: 500 }
-    );
-  }
-
   try {
     const { searchParams } = new URL(request.url);
     const name = searchParams.get("name");
@@ -176,12 +116,10 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const auth = getAuthClient(config);
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = await getGoogleSheetsClient();
 
-    // Get all subjects to find the row to delete
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       range: `'${SUBJECTS_SHEET_NAME}'!A2:C100`,
     });
 
@@ -195,9 +133,8 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Get sheet ID
     const spreadsheet = await sheets.spreadsheets.get({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
     });
 
     const subjectsSheet = spreadsheet.data.sheets?.find(
@@ -211,9 +148,8 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Delete the row (rowIndex + 2 because of 0-index and header row)
     await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       requestBody: {
         requests: [
           {
@@ -221,7 +157,7 @@ export async function DELETE(request: NextRequest) {
               range: {
                 sheetId: subjectsSheet.properties.sheetId,
                 dimension: "ROWS",
-                startIndex: rowIndex + 1, // +1 for header
+                startIndex: rowIndex + 1,
                 endIndex: rowIndex + 2,
               },
             },
@@ -233,23 +169,15 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true, message: "Subject deleted successfully" });
   } catch (error) {
     console.error("[Subjects API] Error deleting subject:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: "Failed to delete subject" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
 }
 
-// PUT - Update a subject
 export async function PUT(request: NextRequest) {
-  const config = getSheetsConfig();
-  if (!config) {
-    return NextResponse.json(
-      { success: false, error: "Google Sheets not configured" },
-      { status: 500 }
-    );
-  }
-
   try {
     const body = await request.json();
     const { oldName, newName, code } = body;
@@ -261,12 +189,10 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const auth = getAuthClient(config);
-    const sheets = google.sheets({ version: "v4", auth });
+    const sheets = await getGoogleSheetsClient();
 
-    // Get all subjects to find the row to update
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       range: `'${SUBJECTS_SHEET_NAME}'!A2:C100`,
     });
 
@@ -280,10 +206,9 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Update the row (rowIndex + 2 because of 0-index and header row)
     const updateRow = rowIndex + 2;
     await sheets.spreadsheets.values.update({
-      spreadsheetId: config.sheetId,
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
       range: `'${SUBJECTS_SHEET_NAME}'!A${updateRow}:C${updateRow}`,
       valueInputOption: "RAW",
       requestBody: {
@@ -291,11 +216,10 @@ export async function PUT(request: NextRequest) {
       },
     });
 
-    // If the name changed, we also need to update all topics that reference this subject
     if (oldName !== newName) {
       try {
         const topicsResponse = await sheets.spreadsheets.values.get({
-          spreadsheetId: config.sheetId,
+          spreadsheetId: STUDENT_DATA_SHEET_ID,
           range: `'Topics'!A2:C100`,
         });
 
@@ -304,15 +228,13 @@ export async function PUT(request: NextRequest) {
 
         topicRows.forEach((row, index) => {
           if (row[0] === oldName) {
-            topicsToUpdate.push(index + 2); // +2 for header and 0-index
+            topicsToUpdate.push(index + 2);
           }
         });
 
-        // Update all topics that reference the old subject name
         if (topicsToUpdate.length > 0) {
-          // Get the Topics sheet ID once
           const spreadsheet = await sheets.spreadsheets.get({
-            spreadsheetId: config.sheetId,
+            spreadsheetId: STUDENT_DATA_SHEET_ID,
           });
 
           const topicsSheet = spreadsheet.data.sheets?.find(
@@ -323,18 +245,19 @@ export async function PUT(request: NextRequest) {
             const updateRequests = topicsToUpdate.map((rowNum) => ({
               updateCells: {
                 range: {
-                  sheetId: topicsSheet.properties.sheetId,
+                  sheetId: topicsSheet.properties!.sheetId,
                   startRowIndex: rowNum - 1,
                   endRowIndex: rowNum,
                   startColumnIndex: 0,
                   endColumnIndex: 1,
                 },
-                values: [{ userEnteredValue: { stringValue: newName } }],
+                rows: [{ values: [{ userEnteredValue: { stringValue: newName } }] }],
+                fields: "userEnteredValue",
               },
             }));
 
             await sheets.spreadsheets.batchUpdate({
-              spreadsheetId: config.sheetId,
+              spreadsheetId: STUDENT_DATA_SHEET_ID,
               requestBody: {
                 requests: updateRequests,
               },
@@ -343,18 +266,16 @@ export async function PUT(request: NextRequest) {
         }
       } catch (topicError) {
         console.error("[Subjects API] Error updating topics:", topicError);
-        // Continue even if topic update fails
       }
     }
 
     return NextResponse.json({ success: true, message: "Subject updated successfully" });
   } catch (error) {
     console.error("[Subjects API] Error updating subject:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: "Failed to update subject" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
 }
-
-
