@@ -64,15 +64,30 @@ async function appendToSheet(result: any) {
   }
 }
 
+async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
+  try {
+    const result = await pool.query(
+      'SELECT teacher_email FROM subjects WHERE LOWER(name) = LOWER($1) LIMIT 1',
+      [subjectName]
+    );
+    return result.rows[0]?.teacher_email || '';
+  } catch {
+    return '';
+  }
+}
+
 async function saveToDatabase(result: any) {
   try {
     const timestamp = new Date();
     const evaluation = result.evaluation ? JSON.stringify(result.evaluation) : null;
+    
+    // Look up teacher email based on subject
+    const teacherEmail = await getTeacherEmailForSubject(result.subject || '');
 
     await pool.query(
       `INSERT INTO viva_results 
-       (timestamp, student_name, student_email, subject, topics, questions_answered, score, overall_feedback, transcript, recording_url, evaluation) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+       (timestamp, student_name, student_email, subject, topics, questions_answered, score, overall_feedback, transcript, recording_url, evaluation, teacher_email) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         timestamp,
         result.studentName || 'Unknown',
@@ -84,7 +99,8 @@ async function saveToDatabase(result: any) {
         result.overallFeedback || '',
         result.transcript || '',
         result.recordingUrl || null,
-        evaluation
+        evaluation,
+        teacherEmail
       ]
     );
 
