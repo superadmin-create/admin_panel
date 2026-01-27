@@ -151,7 +151,7 @@ export default function StudentsPage() {
           <div className="flex flex-col items-center gap-4">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="text-muted-foreground">
-              Loading students from Google Sheets...
+              Loading students...
             </p>
           </div>
         </div>
