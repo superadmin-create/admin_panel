@@ -148,10 +148,38 @@ async function fetchVapiCalls(): Promise<VapiCall[]> {
   return allCalls;
 }
 
+function parseSystemPrompt(call: VapiCall): { studentName?: string; subject?: string; topics?: string } {
+  // Look for the system message which contains student info
+  const messages = (call as any).messages || [];
+  const systemMsg = messages.find((m: any) => m.role === 'system');
+  
+  if (!systemMsg?.message) return {};
+  
+  const content = systemMsg.message;
+  const result: { studentName?: string; subject?: string; topics?: string } = {};
+  
+  // Parse "Name: Anuj Dicholekar"
+  const nameMatch = content.match(/Name:\s*([^\n]+)/i);
+  if (nameMatch) result.studentName = nameMatch[1].trim();
+  
+  // Parse "Subject: Finance"
+  const subjectMatch = content.match(/Subject:\s*([^\n]+)/i);
+  if (subjectMatch) result.subject = subjectMatch[1].trim();
+  
+  // Parse "Topics: Price Action"
+  const topicsMatch = content.match(/Topics?:\s*([^\n]+)/i);
+  if (topicsMatch) result.topics = topicsMatch[1].trim();
+  
+  return result;
+}
+
 function extractVivaData(call: VapiCall) {
   const structuredData = call.analysis?.structuredData || {};
+  const parsedPrompt = parseSystemPrompt(call);
   
+  // Priority: structuredData > parsed system prompt > fallbacks
   const studentName = structuredData.studentName || 
+                      parsedPrompt.studentName ||
                       call.customer?.name || 
                       'Unknown Student';
   
@@ -160,11 +188,13 @@ function extractVivaData(call: VapiCall) {
                        '';
   
   const subject = structuredData.subject || 
+                  parsedPrompt.subject ||
                   call.assistant?.name || 
                   'Unknown Subject';
   
   const topics = structuredData.topics || 
                  structuredData.topic || 
+                 parsedPrompt.topics ||
                  '';
   
   const questionsAnswered = structuredData.questionsAnswered || 
@@ -181,8 +211,8 @@ function extractVivaData(call: VapiCall) {
                           call.analysis?.summary || 
                           '';
   
-  const transcript = call.artifact?.transcript || '';
-  const recordingUrl = call.artifact?.recordingUrl || '';
+  const transcript = call.artifact?.transcript || (call as any).transcript || '';
+  const recordingUrl = call.artifact?.recordingUrl || (call as any).recordingUrl || '';
   
   const evaluation = structuredData.evaluation || 
                      structuredData.marks ? { marks: structuredData.marks, feedback: structuredData.feedback } : 
@@ -202,6 +232,18 @@ function extractVivaData(call: VapiCall) {
     evaluation,
     vapiCallId: call.id
   };
+}
+
+async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
+  try {
+    const result = await pool.query(
+      'SELECT teacher_email FROM subjects WHERE LOWER(name) = LOWER($1) LIMIT 1',
+      [subjectName]
+    );
+    return result.rows[0]?.teacher_email || '';
+  } catch {
+    return '';
+  }
 }
 
 async function syncFromVapi() {
@@ -230,6 +272,9 @@ async function syncFromVapi() {
 
       const data = extractVivaData(call);
       
+      // Look up teacher email based on subject
+      const teacherEmail = await getTeacherEmailForSubject(data.subject);
+      
       const existing = await pool.query(
         'SELECT id FROM viva_results WHERE vapi_call_id = $1',
         [data.vapiCallId]
@@ -240,8 +285,8 @@ async function syncFromVapi() {
           `UPDATE viva_results SET 
            timestamp = $1, student_name = $2, student_email = $3, subject = $4, 
            topics = $5, questions_answered = $6, score = $7, overall_feedback = $8, 
-           transcript = $9, recording_url = $10, evaluation = $11
-           WHERE vapi_call_id = $12`,
+           transcript = $9, recording_url = $10, evaluation = $11, teacher_email = $12
+           WHERE vapi_call_id = $13`,
           [
             data.timestamp,
             data.studentName,
@@ -254,6 +299,7 @@ async function syncFromVapi() {
             data.transcript,
             data.recordingUrl,
             data.evaluation ? JSON.stringify(data.evaluation) : null,
+            teacherEmail,
             data.vapiCallId
           ]
         );
@@ -262,8 +308,8 @@ async function syncFromVapi() {
         await pool.query(
           `INSERT INTO viva_results 
            (timestamp, student_name, student_email, subject, topics, questions_answered, 
-            score, overall_feedback, transcript, recording_url, evaluation, vapi_call_id) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+            score, overall_feedback, transcript, recording_url, evaluation, vapi_call_id, teacher_email) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
           [
             data.timestamp,
             data.studentName,
@@ -276,7 +322,8 @@ async function syncFromVapi() {
             data.transcript,
             data.recordingUrl,
             data.evaluation ? JSON.stringify(data.evaluation) : null,
-            data.vapiCallId
+            data.vapiCallId,
+            teacherEmail
           ]
         );
         synced++;
