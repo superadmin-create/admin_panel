@@ -71,6 +71,9 @@ Database tables:
 - `GET /api/topics` - List all topics
 
 ## Recent Changes
+- 2026-01-27: Auto-sync now saves new VAPI results to BOTH database AND Google Sheets
+- 2026-01-27: Fixed VAPI API pagination (cursor-based with createdAtLt)
+- 2026-01-27: Added auto-sync script to fetch calls from VAPI every 5 minutes
 - 2026-01-27: Added webhook endpoint for VAPI to push viva results directly
 - 2026-01-27: Database now primary read source for viva-results endpoint
 - 2026-01-27: Added sync endpoint to manually sync Sheets → Database
