@@ -358,7 +358,7 @@ export default function ResultsPage() {
               <div>
                 <CardTitle>Examination Results</CardTitle>
                 <CardDescription>
-                  Complete record of all AI viva examinations from Google Sheets
+                  Complete record of all AI viva examinations
                 </CardDescription>
               </div>
               <div className="flex gap-2">
