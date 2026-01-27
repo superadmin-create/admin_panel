@@ -38,19 +38,25 @@ async function fetchVapiCalls(): Promise<VapiCall[]> {
   }
 
   const allCalls: VapiCall[] = [];
-  let page = 1;
+  let createdAtLt: string | null = null;
   let hasMore = true;
 
   while (hasMore) {
-    const response = await fetch(`${VAPI_API_URL}/call?limit=100&page=${page}`, {
+    let url = `${VAPI_API_URL}/call?limit=100`;
+    if (createdAtLt) {
+      url += `&createdAtLt=${encodeURIComponent(createdAtLt)}`;
+    }
+
+    const response = await fetch(url, {
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
+        'Authorization': `Bearer ${apiKey}`
       }
     });
 
     if (!response.ok) {
+      const body = await response.text();
       console.log(`  VAPI API error: ${response.status} ${response.statusText}`);
+      console.log(`  Response: ${body.substring(0, 200)}`);
       return allCalls;
     }
 
@@ -60,7 +66,7 @@ async function fetchVapiCalls(): Promise<VapiCall[]> {
       hasMore = false;
     } else {
       allCalls.push(...calls);
-      page++;
+      createdAtLt = calls[calls.length - 1].createdAt;
       if (calls.length < 100) {
         hasMore = false;
       }
