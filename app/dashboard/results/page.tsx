@@ -56,12 +56,27 @@ export default function ResultsPage() {
   const [selectedResult, setSelectedResult] = useState<VivaResult | null>(null);
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
 
+  const getTeacherEmail = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem("teacherInfo");
+      if (stored) {
+        try {
+          const info = JSON.parse(stored);
+          return info.username || '';
+        } catch { return ''; }
+      }
+    }
+    return '';
+  };
+
   // Fetch results from API
   const fetchResults = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/results");
+      const teacherEmail = getTeacherEmail();
+      const url = teacherEmail ? `/api/results?teacherEmail=${encodeURIComponent(teacherEmail)}` : "/api/results";
+      const response = await fetch(url);
       const data = await response.json();
 
       if (!response.ok) {

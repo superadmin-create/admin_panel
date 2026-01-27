@@ -9,6 +9,7 @@ export interface Subject {
   name: string;
   code: string;
   status: string;
+  teacher_email?: string;
 }
 
 export interface Topic {
@@ -16,6 +17,7 @@ export interface Topic {
   subject_name: string;
   name: string;
   status: string;
+  teacher_email?: string;
 }
 
 export interface VivaResult {
@@ -43,18 +45,24 @@ export interface VivaQuestion {
   active: boolean;
 }
 
-export async function getSubjects(): Promise<Subject[]> {
-  const result = await pool.query(
-    'SELECT * FROM subjects WHERE status = $1 ORDER BY name',
-    ['active']
-  );
+export async function getSubjects(teacherEmail?: string): Promise<Subject[]> {
+  let query = 'SELECT * FROM subjects WHERE status = $1';
+  const params: string[] = ['active'];
+  
+  if (teacherEmail) {
+    query += ' AND teacher_email = $2';
+    params.push(teacherEmail);
+  }
+  
+  query += ' ORDER BY name';
+  const result = await pool.query(query, params);
   return result.rows;
 }
 
-export async function createSubject(name: string, code: string = ''): Promise<Subject> {
+export async function createSubject(name: string, code: string = '', teacherEmail?: string): Promise<Subject> {
   const result = await pool.query(
-    'INSERT INTO subjects (name, code, status) VALUES ($1, $2, $3) ON CONFLICT (name) DO UPDATE SET code = EXCLUDED.code RETURNING *',
-    [name, code, 'active']
+    'INSERT INTO subjects (name, code, status, teacher_email) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO UPDATE SET code = EXCLUDED.code, teacher_email = COALESCE(EXCLUDED.teacher_email, subjects.teacher_email) RETURNING *',
+    [name, code, 'active', teacherEmail || null]
   );
   return result.rows[0];
 }
@@ -81,13 +89,20 @@ export async function deleteSubject(name: string): Promise<boolean> {
   return (result.rowCount ?? 0) > 0;
 }
 
-export async function getTopics(subjectFilter?: string): Promise<Topic[]> {
+export async function getTopics(subjectFilter?: string, teacherEmail?: string): Promise<Topic[]> {
   let query = 'SELECT * FROM topics WHERE status = $1';
   const params: string[] = ['active'];
+  let paramIndex = 2;
   
   if (subjectFilter) {
-    query += ' AND LOWER(subject_name) = LOWER($2)';
+    query += ` AND LOWER(subject_name) = LOWER($${paramIndex})`;
     params.push(subjectFilter);
+    paramIndex++;
+  }
+  
+  if (teacherEmail) {
+    query += ` AND teacher_email = $${paramIndex}`;
+    params.push(teacherEmail);
   }
   
   query += ' ORDER BY subject_name, name';
@@ -95,10 +110,10 @@ export async function getTopics(subjectFilter?: string): Promise<Topic[]> {
   return result.rows;
 }
 
-export async function createTopic(subjectName: string, name: string): Promise<Topic> {
+export async function createTopic(subjectName: string, name: string, teacherEmail?: string): Promise<Topic> {
   const result = await pool.query(
-    'INSERT INTO topics (subject_name, name, status) VALUES ($1, $2, $3) ON CONFLICT (subject_name, name) DO NOTHING RETURNING *',
-    [subjectName, name, 'active']
+    'INSERT INTO topics (subject_name, name, status, teacher_email) VALUES ($1, $2, $3, $4) ON CONFLICT (subject_name, name) DO NOTHING RETURNING *',
+    [subjectName, name, 'active', teacherEmail || null]
   );
   return result.rows[0];
 }
@@ -147,10 +162,17 @@ export async function saveVivaResult(result: Omit<VivaResult, 'id'>): Promise<Vi
   return queryResult.rows[0];
 }
 
-export async function getVivaResults(): Promise<VivaResult[]> {
-  const result = await pool.query(
-    'SELECT * FROM viva_results ORDER BY timestamp DESC'
-  );
+export async function getVivaResults(teacherEmail?: string): Promise<VivaResult[]> {
+  let query = 'SELECT * FROM viva_results';
+  const params: string[] = [];
+  
+  if (teacherEmail) {
+    query += ' WHERE teacher_email = $1';
+    params.push(teacherEmail);
+  }
+  
+  query += ' ORDER BY timestamp DESC';
+  const result = await pool.query(query, params);
   return result.rows;
 }
 

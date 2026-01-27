@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const subjectFilter = searchParams.get("subject");
+    const teacherEmail = searchParams.get("teacherEmail");
 
     const sheets = await getGoogleSheetsClient();
 
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
     try {
       response = await sheets.spreadsheets.values.get({
         spreadsheetId: STUDENT_DATA_SHEET_ID,
-        range: `'${TOPICS_SHEET_NAME}'!A2:C100`,
+        range: `'${TOPICS_SHEET_NAME}'!A2:D100`,
       });
     } catch {
       return NextResponse.json({ success: true, topics: [] });
@@ -30,12 +31,17 @@ export async function GET(request: NextRequest) {
         subject: row[0] || "",
         name: row[1] || "",
         status: row[2] || "active",
+        teacherEmail: row[3] || "",
       }));
 
     if (subjectFilter) {
       topics = topics.filter(
         (t) => t.subject.toLowerCase() === subjectFilter.toLowerCase()
       );
+    }
+    
+    if (teacherEmail) {
+      topics = topics.filter((t) => t.teacherEmail === teacherEmail);
     }
 
     return NextResponse.json({ success: true, topics });
@@ -52,7 +58,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { subject, name } = body;
+    const { subject, name, teacherEmail } = body;
 
     if (!subject || !name) {
       return NextResponse.json(
@@ -86,10 +92,10 @@ export async function POST(request: NextRequest) {
 
       await sheets.spreadsheets.values.update({
         spreadsheetId: STUDENT_DATA_SHEET_ID,
-        range: `'${TOPICS_SHEET_NAME}'!A1:C1`,
+        range: `'${TOPICS_SHEET_NAME}'!A1:D1`,
         valueInputOption: "RAW",
         requestBody: {
-          values: [["Subject", "Topic Name", "Status"]],
+          values: [["Subject", "Topic Name", "Status", "TeacherEmail"]],
         },
       });
     }
@@ -115,15 +121,15 @@ export async function POST(request: NextRequest) {
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: STUDENT_DATA_SHEET_ID,
-      range: `'${TOPICS_SHEET_NAME}'!A:C`,
+      range: `'${TOPICS_SHEET_NAME}'!A:D`,
       valueInputOption: "RAW",
       requestBody: {
-        values: [[subject, name, "active"]],
+        values: [[subject, name, "active", teacherEmail || ""]],
       },
     });
 
     try {
-      await db.createTopic(subject, name);
+      await db.createTopic(subject, name, teacherEmail);
     } catch (dbError) {
       console.error("[Topics API] Database save error (non-blocking):", dbError);
     }

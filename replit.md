@@ -71,6 +71,7 @@ Database tables:
 - `GET /api/topics` - List all topics
 
 ## Recent Changes
+- 2026-01-27: Added teacher_email filtering - teachers only see their own subjects, topics, and results
 - 2026-01-27: Auto-sync now saves new VAPI results to BOTH database AND Google Sheets
 - 2026-01-27: Fixed VAPI API pagination (cursor-based with createdAtLt)
 - 2026-01-27: Added auto-sync script to fetch calls from VAPI every 5 minutes
@@ -80,3 +81,11 @@ Database tables:
 - 2026-01-27: Added PostgreSQL database with dual-save functionality
 - 2026-01-27: Migrated Google Sheets from service account to OAuth2 connector
 - 2026-01-27: Updated all API routes to save data to both Sheets and database
+
+## Teacher Data Isolation
+Each teacher can only see:
+- **Subjects** they created (filtered by `teacher_email`)
+- **Topics** they created (filtered by `teacher_email`)
+- **Viva Results** for their subjects/topics (filtered by `teacher_email`)
+
+The teacher's email (username) is stored in localStorage after login and passed to API requests automatically.

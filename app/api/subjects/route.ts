@@ -4,25 +4,33 @@ import * as db from "@/lib/db";
 
 const SUBJECTS_SHEET_NAME = "Subjects";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const teacherEmail = searchParams.get("teacherEmail");
+
     const sheets = await getGoogleSheetsClient();
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: STUDENT_DATA_SHEET_ID,
-      range: `'${SUBJECTS_SHEET_NAME}'!A2:C100`,
+      range: `'${SUBJECTS_SHEET_NAME}'!A2:D100`,
     });
 
     const rows = response.data.values || [];
     
-    const subjects = rows
+    let subjects = rows
       .filter((row) => row[0])
       .map((row, index) => ({
         id: index + 1,
         name: row[0] || "",
         code: row[1] || "",
         status: row[2] || "active",
+        teacherEmail: row[3] || "",
       }));
+    
+    if (teacherEmail) {
+      subjects = subjects.filter((s) => s.teacherEmail === teacherEmail);
+    }
 
     return NextResponse.json({ success: true, subjects });
   } catch (error: unknown) {
@@ -43,7 +51,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, code } = body;
+    const { name, code, teacherEmail } = body;
 
     if (!name) {
       return NextResponse.json(
@@ -77,25 +85,25 @@ export async function POST(request: NextRequest) {
 
       await sheets.spreadsheets.values.update({
         spreadsheetId: STUDENT_DATA_SHEET_ID,
-        range: `'${SUBJECTS_SHEET_NAME}'!A1:C1`,
+        range: `'${SUBJECTS_SHEET_NAME}'!A1:D1`,
         valueInputOption: "RAW",
         requestBody: {
-          values: [["Name", "Code", "Status"]],
+          values: [["Name", "Code", "Status", "TeacherEmail"]],
         },
       });
     }
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: STUDENT_DATA_SHEET_ID,
-      range: `'${SUBJECTS_SHEET_NAME}'!A:C`,
+      range: `'${SUBJECTS_SHEET_NAME}'!A:D`,
       valueInputOption: "RAW",
       requestBody: {
-        values: [[name, code || "", "active"]],
+        values: [[name, code || "", "active", teacherEmail || ""]],
       },
     });
 
     try {
-      await db.createSubject(name, code || "");
+      await db.createSubject(name, code || "", teacherEmail);
     } catch (dbError) {
       console.error("[Subjects API] Database save error (non-blocking):", dbError);
     }

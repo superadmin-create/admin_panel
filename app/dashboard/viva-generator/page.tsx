@@ -101,11 +101,26 @@ export default function VivaGeneratorPage() {
   const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
   const [isLoadingTopics, setIsLoadingTopics] = useState(true);
 
+  const getTeacherEmail = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem("teacherInfo");
+      if (stored) {
+        try {
+          const info = JSON.parse(stored);
+          return info.username || '';
+        } catch { return ''; }
+      }
+    }
+    return '';
+  };
+
   // Fetch subjects on mount
   useEffect(() => {
     const fetchSubjects = async () => {
       try {
-        const response = await fetch("/api/subjects");
+        const teacherEmail = getTeacherEmail();
+        const url = teacherEmail ? `/api/subjects?teacherEmail=${encodeURIComponent(teacherEmail)}` : "/api/subjects";
+        const response = await fetch(url);
         const data = await response.json();
         if (data.success) {
           setSubjectsList(data.subjects || []);
@@ -124,7 +139,9 @@ export default function VivaGeneratorPage() {
   useEffect(() => {
     const fetchTopics = async () => {
       try {
-        const response = await fetch("/api/topics");
+        const teacherEmail = getTeacherEmail();
+        const url = teacherEmail ? `/api/topics?teacherEmail=${encodeURIComponent(teacherEmail)}` : "/api/topics";
+        const response = await fetch(url);
         const data = await response.json();
         if (data.success) {
           setTopicsList(data.topics || []);

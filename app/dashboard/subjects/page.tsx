@@ -54,6 +54,19 @@ export default function SubjectsPage() {
   const [editSubjectCode, setEditSubjectCode] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
 
+  const getTeacherEmail = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem("teacherInfo");
+      if (stored) {
+        try {
+          const info = JSON.parse(stored);
+          return info.username || '';
+        } catch { return ''; }
+      }
+    }
+    return '';
+  };
+
   // Fetch subjects on mount
   useEffect(() => {
     fetchSubjects();
@@ -62,7 +75,9 @@ export default function SubjectsPage() {
   const fetchSubjects = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/subjects");
+      const teacherEmail = getTeacherEmail();
+      const url = teacherEmail ? `/api/subjects?teacherEmail=${encodeURIComponent(teacherEmail)}` : "/api/subjects";
+      const response = await fetch(url);
       const data = await response.json();
       if (data.success) {
         setSubjects(data.subjects || []);
@@ -79,12 +94,14 @@ export default function SubjectsPage() {
 
     setIsAdding(true);
     try {
+      const teacherEmail = getTeacherEmail();
       const response = await fetch("/api/subjects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newSubjectName.trim(),
           code: newSubjectCode.trim(),
+          teacherEmail,
         }),
       });
 
