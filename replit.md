@@ -53,7 +53,27 @@ Database tables:
 - `OPENAI_API_KEY` - For AI-powered viva question generation
 - Google Sheets OAuth handled via Replit connector
 
+## API Endpoints
+
+### VAPI Integration (Webhook)
+- `POST /api/webhook/viva-result` - Receive viva results from VAPI (student app)
+  - Saves to both database AND Google Sheets
+  - Required field: `studentName`
+  - Optional: `studentEmail`, `subject`, `topics`, `questionsAnswered`, `score`, `overallFeedback`, `transcript`, `recordingUrl`, `evaluation`
+
+### Sync Endpoints
+- `GET /api/sync-results` - Check sync status (count, last result)
+- `POST /api/sync-results` - Manually trigger sync from Google Sheets to database
+
+### Data Endpoints
+- `GET /api/viva-results` - Fetch viva results (reads from database first, falls back to Sheets)
+- `GET /api/subjects` - List all subjects
+- `GET /api/topics` - List all topics
+
 ## Recent Changes
+- 2026-01-27: Added webhook endpoint for VAPI to push viva results directly
+- 2026-01-27: Database now primary read source for viva-results endpoint
+- 2026-01-27: Added sync endpoint to manually sync Sheets → Database
 - 2026-01-27: Added PostgreSQL database with dual-save functionality
 - 2026-01-27: Migrated Google Sheets from service account to OAuth2 connector
 - 2026-01-27: Updated all API routes to save data to both Sheets and database
