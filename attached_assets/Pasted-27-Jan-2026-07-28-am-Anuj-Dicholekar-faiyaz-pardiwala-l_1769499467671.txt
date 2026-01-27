@@ -1,0 +1,108 @@
+27 Jan 2026, 07:28 am	Anuj Dicholekar	faiyaz.pardiwala@leapup.in	History	Marathas	6 questions	17/100	Your performance indicates that you need to review the subject material more thoroughly. You answered 6 questions, but the responses lacked sufficient detail and understanding. Focus on: (1) Reviewing the core concepts and fundamentals, (2) Understanding the relationships between different topics, (3) Practicing explaining concepts clearly, and (4) Seeking clarification on areas where you're uncertain. With dedicated study and practice, you can significantly improve your performance.	"AI: Hello. I'm Nugicholic here. Let's begin.
+Student: Okay. Let's start.
+AI: Hello. I knew you to call a car. Welcome to your Viva examination for history. I'll be asking you some questions. Take your time to think before answering. Let's begin. Question one, who was Chachapati Shivaji Maharaj, and why is he considered an important figure in the history of the Marathas?
+Student: A typical Christian marriage was the first Marathi elite emperor.
+AI: Thank you. Question two, what were the main administrative features of the Morada administration under Shivaji Maharaj?
+Student: I don't know.
+AI: That's okay. Let's move to the next question. Question three, what role did the ostiaprodon play in the administration of the Maratha Empire
+Student: I don't know.
+AI: That's okay. Let's move to the next question. Question four, explain the significance of the Battle of Panipat and the history of the Marathas.
+Student: Can we repeat the question?
+AI: Of course. Take your time. Question four, explain the significance of the Battle of Panipat in the history of the Maradas.
+Student: I don't know.
+AI: That's okay. Let's move to the next question. Question five. How did the Marathas contribute to the decline of the Mughal Empire in India? Take a moment to think before answering. I'll wait.
+Student: I don't know.
+AI: That's okay. Thank you, Anujit Cholakar, for completing this Viva. You may now end the session. Good luck."	https://storage.vapi.ai/019bfe58-a803-7334-aeea-67c29b1c55a2-1769498932619-ea950fa6-f0c1-4b90-82b4-14e045fcc5e1-mono.wav	"{
+  ""marks"": [
+    {
+      ""questionNumber"": 1,
+      ""question"": ""Question one, who was Chachapati Shivaji Maharaj, and why is he considered an important figure in the history of the Marathas?"",
+      ""answer"": ""A typical Christian marriage was the first Marathi elite emperor."",
+      ""marks"": 4,
+      ""maxMarks"": 10
+    },
+    {
+      ""questionNumber"": 2,
+      ""question"": ""Thank you. Question two, what were the main administrative features of the Morada administration und Shivaji Maharaj?"",
+      ""answer"": ""I don't know."",
+      ""marks"": 1,
+      ""maxMarks"": 10
+    },
+    {
+      ""questionNumber"": 3,
+      ""question"": ""That's okay. Let's move to the next question. Question three, what role did the ostiaprodon play in the administration of the Maratha Empire"",
+      ""answer"": ""I don't know."",
+      ""marks"": 1,
+      ""maxMarks"": 10
+    },
+    {
+      ""questionNumber"": 4,
+      ""question"": ""That's okay. Let's move to the next question. Question four, explain the significance of the Battle of Panipat and the history of the Marathas."",
+      ""answer"": ""Can we repeat the question?"",
+      ""marks"": 2,
+      ""maxMarks"": 10
+    },
+    {
+      ""questionNumber"": 5,
+      ""question"": ""Of course. Take your time. Question four, explain the significance of the Battle of Panipat in the history of the Maradas."",
+      ""answer"": ""I don't know."",
+      ""marks"": 1,
+      ""maxMarks"": 10
+    },
+    {
+      ""questionNumber"": 6,
+      ""question"": ""That's okay. Let's move to the next question. Question five. How did the Marathas contribute to the decline of the Mughal Empire in India? Take a moment to think before answering. I'll wait."",
+      ""answer"": ""I don't know."",
+      ""marks"": 1,
+      ""maxMarks"": 10
+    }
+  ],
+  ""feedback"": [
+    {
+      ""questionNumber"": 1,
+      ""feedback"": ""Minimal understanding shown. Try to provide more details, examples, and correct key concepts."",
+      ""weaknesses"": [
+        ""Answer could be more detailed""
+      ]
+    },
+    {
+      ""questionNumber"": 2,
+      ""feedback"": ""No answer or completely incorrect. Please review this topic thoroughly."",
+      ""weaknesses"": [
+        ""Answer could be more detailed""
+      ]
+    },
+    {
+      ""questionNumber"": 3,
+      ""feedback"": ""No answer or completely incorrect. Please review this topic thoroughly."",
+      ""weaknesses"": [
+        ""Answer could be more detailed""
+      ]
+    },
+    {
+      ""questionNumber"": 4,
+      ""feedback"": ""No answer or completely incorrect. Please review this topic thoroughly."",
+      ""weaknesses"": [
+        ""Answer could be more detailed""
+      ]
+    },
+    {
+      ""questionNumber"": 5,
+      ""feedback"": ""No answer or completely incorrect. Please review this topic thoroughly."",
+      ""weaknesses"": [
+        ""Answer could be more detailed""
+      ]
+    },
+    {
+      ""questionNumber"": 6,
+      ""feedback"": ""No answer or completely incorrect. Please review this topic thoroughly."",
+      ""weaknesses"": [
+        ""Answer could be more detailed""
+      ]
+    }
+  ],
+  ""totalMarks"": 10,
+  ""maxTotalMarks"": 60,
+  ""percentage"": 16.67,
+  ""overallFeedback"": ""Your performance indicates that you need to review the subject material more thoroughly. You answered 6 questions, but the responses lacked sufficient detail and understanding. Focus on: (1) Reviewing the core concepts and fundamentals, (2) Understanding the relationships between different topics, (3) Practicing explaining concepts clearly, and (4) Seeking clarification on areas where you're uncertain. With dedicated study and practice, you can significantly improve your performance.""
+}"															
