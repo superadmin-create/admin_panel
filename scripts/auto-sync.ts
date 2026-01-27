@@ -33,7 +33,7 @@ interface VapiCall {
 async function fetchVapiCalls(): Promise<VapiCall[]> {
   const apiKey = process.env.VAPI_API_KEY;
   if (!apiKey) {
-    console.log('  VAPI_API_KEY not set');
+    console.log('  VAPI_API_KEY (Private Key) not set');
     return [];
   }
 
