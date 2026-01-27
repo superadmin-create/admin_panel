@@ -111,15 +111,85 @@ async function saveToDatabase(result: any) {
   }
 }
 
+function parseSystemPrompt(messages: any[]): { studentName?: string; subject?: string; topics?: string } {
+  const systemMsg = messages?.find((m: any) => m.role === 'system');
+  if (!systemMsg?.message) return {};
+  
+  const content = systemMsg.message;
+  const result: { studentName?: string; subject?: string; topics?: string } = {};
+  
+  const nameMatch = content.match(/Name:\s*([^\n]+)/i);
+  if (nameMatch) result.studentName = nameMatch[1].trim();
+  
+  const subjectMatch = content.match(/Subject:\s*([^\n]+)/i);
+  if (subjectMatch) result.subject = subjectMatch[1].trim();
+  
+  const topicsMatch = content.match(/Topics?:\s*([^\n]+)/i);
+  if (topicsMatch) result.topics = topicsMatch[1].trim();
+  
+  return result;
+}
+
+function normalizeVivaResult(payload: any): any {
+  // Check if this is a VAPI webhook payload (has 'message' with 'type' and 'call')
+  if (payload.message?.type === 'end-of-call-report' && payload.message?.call) {
+    const call = payload.message.call;
+    const structuredData = call.analysis?.structuredData || {};
+    const parsedPrompt = parseSystemPrompt(call.messages || []);
+    
+    return {
+      studentName: structuredData.studentName || parsedPrompt.studentName || call.customer?.name || 'Unknown Student',
+      studentEmail: structuredData.studentEmail || structuredData.email || '',
+      subject: structuredData.subject || parsedPrompt.subject || call.assistant?.name || 'Unknown Subject',
+      topics: structuredData.topics || structuredData.topic || parsedPrompt.topics || '',
+      questionsAnswered: structuredData.questionsAnswered || structuredData.totalQuestions || 0,
+      score: structuredData.score || structuredData.totalMarks || structuredData.percentage || 0,
+      overallFeedback: structuredData.overallFeedback || structuredData.feedback || call.analysis?.summary || '',
+      transcript: call.artifact?.transcript || call.transcript || '',
+      recordingUrl: call.artifact?.recordingUrl || call.recordingUrl || '',
+      evaluation: structuredData.evaluation || (structuredData.marks ? { marks: structuredData.marks, feedback: structuredData.feedback } : null),
+      vapiCallId: call.id
+    };
+  }
+  
+  // Check if this is a direct VAPI call object (has 'id', 'status', 'createdAt')
+  if (payload.id && payload.status && payload.createdAt) {
+    const structuredData = payload.analysis?.structuredData || {};
+    const parsedPrompt = parseSystemPrompt(payload.messages || []);
+    
+    return {
+      studentName: structuredData.studentName || parsedPrompt.studentName || payload.customer?.name || 'Unknown Student',
+      studentEmail: structuredData.studentEmail || structuredData.email || '',
+      subject: structuredData.subject || parsedPrompt.subject || payload.assistant?.name || 'Unknown Subject',
+      topics: structuredData.topics || structuredData.topic || parsedPrompt.topics || '',
+      questionsAnswered: structuredData.questionsAnswered || structuredData.totalQuestions || 0,
+      score: structuredData.score || structuredData.totalMarks || structuredData.percentage || 0,
+      overallFeedback: structuredData.overallFeedback || structuredData.feedback || payload.analysis?.summary || '',
+      transcript: payload.artifact?.transcript || payload.transcript || '',
+      recordingUrl: payload.artifact?.recordingUrl || payload.recordingUrl || '',
+      evaluation: structuredData.evaluation || (structuredData.marks ? { marks: structuredData.marks, feedback: structuredData.feedback } : null),
+      vapiCallId: payload.id
+    };
+  }
+  
+  // Already in expected format (from student app)
+  return payload;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const result = await request.json();
+    const payload = await request.json();
+    
+    // Log incoming webhook for debugging
+    console.log("[Webhook] Received payload type:", 
+      payload.message?.type || (payload.id ? 'vapi-call' : 'direct'));
+    
+    // Normalize the payload to expected format
+    const result = normalizeVivaResult(payload);
 
-    if (!result.studentName) {
-      return NextResponse.json(
-        { error: "Student name is required" },
-        { status: 400 }
-      );
+    if (!result.studentName || result.studentName === 'Unknown Student') {
+      // Still try to save even without name, but log it
+      console.log("[Webhook] No student name found in payload");
     }
 
     const [dbSuccess, sheetSuccess] = await Promise.all([
@@ -127,11 +197,26 @@ export async function POST(request: NextRequest) {
       appendToSheet(result)
     ]);
 
+    console.log("[Webhook] Saved:", { 
+      studentName: result.studentName, 
+      subject: result.subject,
+      score: result.score,
+      questionsAnswered: result.questionsAnswered,
+      dbSuccess, 
+      sheetSuccess 
+    });
+
     return NextResponse.json({
       success: true,
       savedToDatabase: dbSuccess,
       savedToSheet: sheetSuccess,
-      message: `Result saved${dbSuccess ? ' to database' : ''}${dbSuccess && sheetSuccess ? ' and' : ''}${sheetSuccess ? ' to Google Sheets' : ''}`
+      message: `Result saved${dbSuccess ? ' to database' : ''}${dbSuccess && sheetSuccess ? ' and' : ''}${sheetSuccess ? ' to Google Sheets' : ''}`,
+      parsed: {
+        studentName: result.studentName,
+        subject: result.subject,
+        score: result.score,
+        questionsAnswered: result.questionsAnswered
+      }
     });
   } catch (error) {
     console.error("[Webhook] Error processing viva result:", error);
