@@ -213,9 +213,13 @@ async function syncVivaQuestions(sheets: any) {
 async function syncTeachers(sheets: any) {
   console.log('Syncing teachers...');
   try {
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: TEACHER_SHEET_ID });
+    const firstSheetName = spreadsheet.data.sheets?.[0]?.properties?.title || 'Sheet1';
+    console.log(`  Found sheet: ${firstSheetName}`);
+
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: TEACHER_SHEET_ID,
-      range: `'Teachers'!A2:D100`,
+      range: `'${firstSheetName}'!A2:D100`,
     });
 
     const rows = response.data.values || [];
@@ -226,18 +230,14 @@ async function syncTeachers(sheets: any) {
         await pool.query(
           `INSERT INTO teachers (email, name, password_hash, status) VALUES ($1, $2, $3, $4) 
            ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, password_hash = EXCLUDED.password_hash`,
-          [row[0], row[1] || '', row[2] || '', row[3] || 'active']
+          [row[0], row[1] || '', row[2] || '', 'active']
         );
         count++;
       }
     }
     console.log(`  Synced ${count} teachers`);
   } catch (error: any) {
-    if (error.message?.includes('Unable to parse range')) {
-      console.log('  No Teachers sheet found');
-    } else {
-      console.error('  Error syncing teachers:', error.message);
-    }
+    console.error('  Error syncing teachers:', error.message);
   }
 }
 
