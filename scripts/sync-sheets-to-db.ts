@@ -115,6 +115,54 @@ async function syncTopics(sheets: any) {
   }
 }
 
+function parseTimestamp(ts: string): Date {
+  if (!ts) return new Date();
+  
+  // Try ISO format first (2024-01-15T10:30:00Z)
+  if (ts.includes('T') && (ts.includes('Z') || ts.includes('+'))) {
+    const date = new Date(ts);
+    if (!isNaN(date.getTime())) return date;
+  }
+  
+  // Try "15 Jan 2024, 10:30 am" format
+  const formattedMatch = ts.match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4}),?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (formattedMatch) {
+    const [, day, month, year, hour, minute, second, ampm] = formattedMatch;
+    const monthMap: Record<string, number> = {
+      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+    };
+    let hour24 = parseInt(hour, 10);
+    if (ampm?.toLowerCase() === 'pm' && hour24 !== 12) hour24 += 12;
+    if (ampm?.toLowerCase() === 'am' && hour24 === 12) hour24 = 0;
+    return new Date(
+      parseInt(year, 10),
+      monthMap[month.toLowerCase()],
+      parseInt(day, 10),
+      hour24,
+      parseInt(minute, 10),
+      parseInt(second || '0', 10)
+    );
+  }
+
+  // Try MM/DD/YYYY or DD/MM/YYYY formats
+  const slashMatch = ts.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (slashMatch) {
+    const [, p1, p2, year] = slashMatch;
+    const fullYear = year.length === 2 ? 2000 + parseInt(year, 10) : parseInt(year, 10);
+    // Assume MM/DD/YYYY for US format
+    return new Date(fullYear, parseInt(p1, 10) - 1, parseInt(p2, 10));
+  }
+
+  // Try standard Date parsing as fallback
+  const parsed = new Date(ts);
+  if (!isNaN(parsed.getTime())) return parsed;
+
+  // Last resort: return current date
+  console.log(`  Warning: Could not parse date "${ts}", using current date`);
+  return new Date();
+}
+
 async function syncVivaResults(sheets: any) {
   console.log('Syncing viva results...');
   try {
@@ -125,42 +173,52 @@ async function syncVivaResults(sheets: any) {
 
     const rows = response.data.values || [];
     let count = 0;
+    let errors = 0;
 
     for (const row of rows) {
-      if (row[0] && row[1]) {
-        const timestamp = row[0] ? new Date(row[0]) : new Date();
-        const questionsAnswered = row[5] ? parseInt(row[5].match(/(\d+)/)?.[1] || '0', 10) : 0;
-        const score = row[6] ? parseInt(row[6].match(/(\d+)/)?.[1] || '0', 10) : 0;
-        
-        let evaluation = null;
-        if (row[10]) {
-          try {
-            evaluation = JSON.parse(row[10]);
-          } catch {}
-        }
+      try {
+        // Accept any row that has at least a student name (column B)
+        if (row[1]) {
+          const timestamp = parseTimestamp(row[0] || '');
+          const questionsAnswered = row[5] ? parseInt(String(row[5]).match(/(\d+)/)?.[1] || '0', 10) : 0;
+          const score = row[6] ? parseInt(String(row[6]).match(/(\d+)/)?.[1] || '0', 10) : 0;
+          
+          let evaluation = null;
+          if (row[10]) {
+            try {
+              const evalStr = String(row[10]).trim();
+              if (evalStr.startsWith('{') || evalStr.startsWith('[')) {
+                evaluation = JSON.parse(evalStr);
+              }
+            } catch {}
+          }
 
-        await pool.query(
-          `INSERT INTO viva_results 
-           (timestamp, student_name, student_email, subject, topics, questions_answered, score, overall_feedback, transcript, recording_url, evaluation) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-          [
-            timestamp,
-            row[1] || 'Unknown',
-            row[2] || '',
-            row[3] || 'Unknown Subject',
-            row[4] || '',
-            questionsAnswered,
-            score,
-            row[7] || '',
-            row[8] || '',
-            row[9] || null,
-            evaluation ? JSON.stringify(evaluation) : null
-          ]
-        );
-        count++;
+          await pool.query(
+            `INSERT INTO viva_results 
+             (timestamp, student_name, student_email, subject, topics, questions_answered, score, overall_feedback, transcript, recording_url, evaluation) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            [
+              timestamp,
+              row[1] || 'Unknown',
+              row[2] || '',
+              row[3] || 'Unknown Subject',
+              row[4] || '',
+              questionsAnswered,
+              score,
+              row[7] || '',
+              row[8] || '',
+              row[9] || null,
+              evaluation ? JSON.stringify(evaluation) : null
+            ]
+          );
+          count++;
+        }
+      } catch (rowError: any) {
+        errors++;
+        console.log(`  Error on row: ${rowError.message}`);
       }
     }
-    console.log(`  Synced ${count} viva results`);
+    console.log(`  Synced ${count} viva results (${errors} errors)`);
   } catch (error: any) {
     if (error.message?.includes('Unable to parse range')) {
       console.log('  No Viva Results sheet found');
