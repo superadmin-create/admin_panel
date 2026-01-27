@@ -77,6 +77,75 @@ async function appendToGoogleSheet(data: any): Promise<boolean> {
   }
 }
 
+// Fetch evaluation data from Google Sheets
+interface SheetEvaluation {
+  studentName: string;
+  subject: string;
+  score: number;
+  questionsAnswered: number;
+  overallFeedback: string;
+  evaluation?: any;
+  timestamp: string;
+}
+
+let sheetsEvaluationCache: SheetEvaluation[] | null = null;
+
+async function fetchSheetsEvaluations(): Promise<SheetEvaluation[]> {
+  if (sheetsEvaluationCache) return sheetsEvaluationCache;
+  
+  try {
+    const accessToken = await getGoogleSheetsAccessToken();
+    if (!accessToken) {
+      console.log('  No Google Sheets token, skipping sheets sync');
+      return [];
+    }
+
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
+      range: "'Viva Results'!A2:L",
+    });
+
+    const rows = response.data.values || [];
+    sheetsEvaluationCache = rows.map(row => ({
+      timestamp: row[0] || '',
+      studentName: row[1] || '',
+      subject: row[3] || '',
+      questionsAnswered: parseInt(row[5]) || 0,
+      score: parseInt(row[6]) || 0,
+      overallFeedback: row[7] || '',
+      evaluation: row[10] ? JSON.parse(row[10]) : null
+    })).filter(r => r.score > 0 || r.questionsAnswered > 0);
+
+    console.log(`  Loaded ${sheetsEvaluationCache.length} evaluations from Google Sheets`);
+    return sheetsEvaluationCache;
+  } catch (error: any) {
+    console.log(`  Sheets fetch error: ${error.message}`);
+    return [];
+  }
+}
+
+function findMatchingSheetEvaluation(studentName: string, subject: string, timestamp: Date): SheetEvaluation | null {
+  if (!sheetsEvaluationCache) return null;
+  
+  const targetTime = timestamp.getTime();
+  const fiveMinutes = 5 * 60 * 1000;
+  
+  // Find matching record by student name and subject within 5 minutes
+  return sheetsEvaluationCache.find(eval => {
+    const nameMatch = eval.studentName.toLowerCase().includes(studentName.toLowerCase().split(' ')[0]) ||
+                      studentName.toLowerCase().includes(eval.studentName.toLowerCase().split(' ')[0]);
+    const subjectMatch = eval.subject.toLowerCase() === subject.toLowerCase();
+    const evalTime = new Date(eval.timestamp).getTime();
+    const timeMatch = Math.abs(evalTime - targetTime) < fiveMinutes;
+    
+    return nameMatch && subjectMatch && timeMatch;
+  }) || null;
+}
+
 interface VapiCall {
   id: string;
   createdAt: string;
