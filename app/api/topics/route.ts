@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { STUDENT_DATA_SHEET_ID, getGoogleSheetsClient } from "@/lib/api/sheets";
+import * as db from "@/lib/db";
 
 const TOPICS_SHEET_NAME = "Topics";
 
@@ -121,6 +122,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    try {
+      await db.createTopic(subject, name);
+    } catch (dbError) {
+      console.error("[Topics API] Database save error (non-blocking):", dbError);
+    }
+
     return NextResponse.json({
       success: true,
       message: "Topic added successfully",
@@ -202,6 +209,12 @@ export async function DELETE(request: NextRequest) {
       },
     });
 
+    try {
+      await db.deleteTopic(subject, name);
+    } catch (dbError) {
+      console.error("[Topics API] Database delete error (non-blocking):", dbError);
+    }
+
     return NextResponse.json({
       success: true,
       message: "Topic deleted successfully",
@@ -281,6 +294,12 @@ export async function PUT(request: NextRequest) {
         values: [[newSubject, newName, rows[rowIndex][2] || "active"]],
       },
     });
+
+    try {
+      await db.updateTopic(oldSubject, oldName, newSubject, newName);
+    } catch (dbError) {
+      console.error("[Topics API] Database update error (non-blocking):", dbError);
+    }
 
     return NextResponse.json({ success: true, message: "Topic updated successfully" });
   } catch (error) {

@@ -13,7 +13,6 @@ export interface Subject {
 
 export interface Topic {
   id: number;
-  subject_id: number | null;
   subject_name: string;
   name: string;
   status: string;

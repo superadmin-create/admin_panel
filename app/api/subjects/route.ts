@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { STUDENT_DATA_SHEET_ID, getGoogleSheetsClient } from "@/lib/api/sheets";
+import * as db from "@/lib/db";
 
 const SUBJECTS_SHEET_NAME = "Subjects";
 
@@ -93,6 +94,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    try {
+      await db.createSubject(name, code || "");
+    } catch (dbError) {
+      console.error("[Subjects API] Database save error (non-blocking):", dbError);
+    }
+
     return NextResponse.json({ success: true, message: "Subject added successfully" });
   } catch (error) {
     console.error("[Subjects API] Error adding subject:", error);
@@ -165,6 +172,12 @@ export async function DELETE(request: NextRequest) {
         ],
       },
     });
+
+    try {
+      await db.deleteSubject(name);
+    } catch (dbError) {
+      console.error("[Subjects API] Database delete error (non-blocking):", dbError);
+    }
 
     return NextResponse.json({ success: true, message: "Subject deleted successfully" });
   } catch (error) {
@@ -267,6 +280,12 @@ export async function PUT(request: NextRequest) {
       } catch (topicError) {
         console.error("[Subjects API] Error updating topics:", topicError);
       }
+    }
+
+    try {
+      await db.updateSubject(oldName, newName, code);
+    } catch (dbError) {
+      console.error("[Subjects API] Database update error (non-blocking):", dbError);
     }
 
     return NextResponse.json({ success: true, message: "Subject updated successfully" });

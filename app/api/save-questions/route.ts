@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { saveQuestionsToSheets } from "@/lib/api/save-questions";
 import { STUDENT_DATA_SHEET_ID, getGoogleSheetsClient } from "@/lib/api/sheets";
+import * as db from "@/lib/db";
 
 const SUBJECTS_SHEET_NAME = "Subjects";
 
@@ -57,6 +58,12 @@ async function ensureSubjectExists(subjectName: string): Promise<void> {
       });
       console.log(`[Subjects] Auto-added new subject: ${subjectName}`);
     }
+
+    try {
+      await db.createSubject(subjectName, "");
+    } catch (dbError) {
+      console.error("[Subjects] Database save error:", dbError);
+    }
   } catch (error) {
     console.error("[Subjects] Error ensuring subject exists:", error);
   }
@@ -86,6 +93,20 @@ export async function POST(request: NextRequest) {
         { error: result.error || "Failed to save questions" },
         { status: 500 }
       );
+    }
+
+    try {
+      await db.saveVivaQuestions(
+        subject,
+        (topics || []).join(", "),
+        questions.map((q: { question: string; expectedAnswer: string; difficulty: string }) => ({
+          question: q.question,
+          expectedAnswer: q.expectedAnswer,
+          difficulty: q.difficulty,
+        }))
+      );
+    } catch (dbError) {
+      console.error("[API] Database save error (non-blocking):", dbError);
     }
 
     await ensureSubjectExists(subject);
