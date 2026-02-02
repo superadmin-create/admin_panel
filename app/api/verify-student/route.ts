@@ -52,17 +52,25 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Edmingle API error: ${response.status} - ${errorText}`);
+      console.log(`Edmingle API response: ${response.status} - ${errorText}`);
       
-      if (response.status === 404) {
-        return NextResponse.json(
-          { 
-            success: false, 
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.code === 10004 || errorData.message?.toLowerCase().includes("no such user")) {
+          return NextResponse.json({
+            success: true,
             verified: false,
-            message: "Student not found in the system. Please contact your institution." 
-          },
-          { status: 200 }
-        );
+            message: "Student not found. Please ensure you are registered with your institution."
+          });
+        }
+      } catch {}
+      
+      if (response.status === 404 || response.status === 400) {
+        return NextResponse.json({
+          success: true,
+          verified: false,
+          message: "Student not found. Please ensure you are registered with your institution."
+        });
       }
       
       return NextResponse.json(
