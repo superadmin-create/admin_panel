@@ -34,7 +34,8 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch("/api/stats");
+        const teacherEmail = localStorage.getItem("teacherEmail") || "";
+        const response = await fetch(`/api/stats?teacherEmail=${encodeURIComponent(teacherEmail)}`);
         const data = await response.json();
 
         if (response.ok && data.success && data.data) {

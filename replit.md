@@ -71,6 +71,9 @@ Database tables:
 - `GET /api/topics` - List all topics
 
 ## Recent Changes
+- 2026-02-02: Dashboard now shows ONLY the logged-in teacher's data (subjects, topics, viva results)
+- 2026-02-02: Auto-sync now merges evaluation data from VAPI (structuredData) OR Google Sheets (fallback)
+- 2026-02-02: Added function to update existing records with missing evaluation scores from Google Sheets
 - 2026-01-27: Added teacher_email filtering - teachers only see their own subjects, topics, and results
 - 2026-01-27: Auto-sync now saves new VAPI results to BOTH database AND Google Sheets
 - 2026-01-27: Fixed VAPI API pagination (cursor-based with createdAtLt)
