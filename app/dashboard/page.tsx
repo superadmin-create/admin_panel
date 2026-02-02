@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import {
   Card,
@@ -17,10 +18,12 @@ import {
   Clock,
   ArrowUpRight,
   ArrowDownRight,
+  Sparkles,
 } from "lucide-react";
 import type { VivaResult } from "@/lib/types/viva";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalVivas: 0,
@@ -281,21 +284,52 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <button className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all group">
+              <button 
+                onClick={() => router.push("/dashboard/students")}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all group"
+              >
                 <Users className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
-                <span className="text-sm font-medium">Add Student</span>
+                <span className="text-sm font-medium">View Students</span>
               </button>
-              <button className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all group">
+              <button 
+                onClick={() => router.push("/dashboard/results")}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all group"
+              >
                 <ClipboardCheck className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
                 <span className="text-sm font-medium">View All Results</span>
               </button>
-              <button className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all group">
+              <button 
+                onClick={() => {
+                  const csvData = stats.recentResults.map(r => ({
+                    Student: r.studentName,
+                    Subject: r.subject,
+                    Score: r.score,
+                    Status: r.score >= 50 ? 'Passed' : 'Failed',
+                    Date: r.timestamp
+                  }));
+                  const headers = ['Student', 'Subject', 'Score', 'Status', 'Date'];
+                  const csv = [
+                    headers.join(','),
+                    ...csvData.map(row => headers.map(h => `"${row[h as keyof typeof row] || ''}"`).join(','))
+                  ].join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `viva-results-${new Date().toISOString().split('T')[0]}.csv`;
+                  a.click();
+                }}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all group"
+              >
                 <TrendingUp className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
                 <span className="text-sm font-medium">Export Report</span>
               </button>
-              <button className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all group">
-                <Clock className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
-                <span className="text-sm font-medium">Schedule Viva</span>
+              <button 
+                onClick={() => router.push("/dashboard/viva-generator")}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-all group"
+              >
+                <Sparkles className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
+                <span className="text-sm font-medium">Generate Viva</span>
               </button>
             </div>
           </CardContent>
