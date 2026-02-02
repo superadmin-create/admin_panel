@@ -346,7 +346,6 @@ export default function VivaGeneratorPage() {
       return;
     }
     
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
     const params = new URLSearchParams();
     params.set('subject', subject);
     if (selectedTopic && selectedTopic !== 'all') {
@@ -355,7 +354,8 @@ export default function VivaGeneratorPage() {
       params.set('topic', filteredTopics.map(t => t.name).join(','));
     }
     
-    const link = `${baseUrl}/viva/start?${params.toString()}`;
+    // Link directly to ai-viva app, skipping admin panel registration
+    const link = `https://fa4efc94-8e50-4690-906b-1db8890f5930-00-1fua1gs9falsj.sisko.replit.dev?${params.toString()}`;
     setVivaLink(link);
     setLinkCopied(false);
   };
