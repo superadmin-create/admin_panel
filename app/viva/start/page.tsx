@@ -40,7 +40,8 @@ function VivaStartContent() {
         params.set('topic', topic);
       }
       
-      const aiVivaUrl = `https://fa4efc94-8e50-4690-906b-1db8890f5930-00-1fua1gs9falsj.sisko.replit.dev?${params.toString()}`;
+      // Redirect directly to /viva page to skip duplicate registration
+      const aiVivaUrl = `https://fa4efc94-8e50-4690-906b-1db8890f5930-00-1fua1gs9falsj.sisko.replit.dev/viva?${params.toString()}`;
       window.location.href = aiVivaUrl;
     } catch (err) {
       console.error('Error:', err);
