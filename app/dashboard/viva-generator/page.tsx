@@ -354,8 +354,9 @@ export default function VivaGeneratorPage() {
       params.set('topic', filteredTopics.map(t => t.name).join(','));
     }
     
-    // Link directly to ai-viva app, skipping admin panel registration
-    const link = `https://fa4efc94-8e50-4690-906b-1db8890f5930-00-1fua1gs9falsj.sisko.replit.dev?${params.toString()}`;
+    // Link to integrated student page
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const link = `${baseUrl}/student?${params.toString()}`;
     setVivaLink(link);
     setLinkCopied(false);
   };
