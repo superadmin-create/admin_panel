@@ -135,12 +135,12 @@ function findMatchingSheetEvaluation(studentName: string, subject: string, times
   const fiveMinutes = 5 * 60 * 1000;
   
   // Find matching record by student name and subject within 5 minutes
-  return sheetsEvaluationCache.find(eval => {
-    const nameMatch = eval.studentName.toLowerCase().includes(studentName.toLowerCase().split(' ')[0]) ||
-                      studentName.toLowerCase().includes(eval.studentName.toLowerCase().split(' ')[0]);
-    const subjectMatch = eval.subject.toLowerCase() === subject.toLowerCase();
-    const evalTime = new Date(eval.timestamp).getTime();
-    const timeMatch = Math.abs(evalTime - targetTime) < fiveMinutes;
+  return sheetsEvaluationCache.find(entry => {
+    const nameMatch = entry.studentName.toLowerCase().includes(studentName.toLowerCase().split(' ')[0]) ||
+                      studentName.toLowerCase().includes(entry.studentName.toLowerCase().split(' ')[0]);
+    const subjectMatch = entry.subject.toLowerCase() === subject.toLowerCase();
+    const entryTime = new Date(entry.timestamp).getTime();
+    const timeMatch = Math.abs(entryTime - targetTime) < fiveMinutes;
     
     return nameMatch && subjectMatch && timeMatch;
   }) || null;
@@ -266,26 +266,37 @@ function extractVivaData(call: VapiCall) {
                  parsedPrompt.topics ||
                  '';
   
-  const questionsAnswered = structuredData.questionsAnswered || 
-                            structuredData.totalQuestions || 
-                            0;
+  let questionsAnswered = structuredData.questionsAnswered || 
+                          structuredData.totalQuestions || 
+                          0;
   
-  const score = structuredData.score || 
-                structuredData.totalMarks || 
-                structuredData.marks || 
-                0;
+  let score = structuredData.score || 
+              structuredData.totalMarks || 
+              structuredData.marks || 
+              0;
   
-  const overallFeedback = structuredData.overallFeedback || 
-                          structuredData.feedback || 
-                          call.analysis?.summary || 
-                          '';
+  let overallFeedback = structuredData.overallFeedback || 
+                        structuredData.feedback || 
+                        call.analysis?.summary || 
+                        '';
+  
+  let evaluation = structuredData.evaluation || 
+                   (structuredData.marks ? { marks: structuredData.marks, feedback: structuredData.feedback } : null);
+
+  // If no evaluation from VAPI, try Google Sheets fallback
+  if (score === 0 && sheetsEvaluationCache) {
+    const sheetMatch = findMatchingSheetEvaluation(studentName, subject, new Date(call.createdAt));
+    if (sheetMatch) {
+      score = sheetMatch.score;
+      questionsAnswered = sheetMatch.questionsAnswered || questionsAnswered;
+      overallFeedback = sheetMatch.overallFeedback || overallFeedback;
+      evaluation = sheetMatch.evaluation || evaluation;
+      console.log(`    -> Found evaluation in Sheets: ${score}% for ${studentName}`);
+    }
+  }
   
   const transcript = call.artifact?.transcript || (call as any).transcript || '';
   const recordingUrl = call.artifact?.recordingUrl || (call as any).recordingUrl || '';
-  
-  const evaluation = structuredData.evaluation || 
-                     structuredData.marks ? { marks: structuredData.marks, feedback: structuredData.feedback } : 
-                     null;
 
   return {
     timestamp: new Date(call.createdAt),
@@ -293,8 +304,8 @@ function extractVivaData(call: VapiCall) {
     studentEmail,
     subject,
     topics: typeof topics === 'string' ? topics : JSON.stringify(topics),
-    questionsAnswered: typeof questionsAnswered === 'number' ? questionsAnswered : parseInt(questionsAnswered) || 0,
-    score: typeof score === 'number' ? score : parseInt(score) || 0,
+    questionsAnswered: typeof questionsAnswered === 'number' ? questionsAnswered : parseInt(String(questionsAnswered)) || 0,
+    score: typeof score === 'number' ? score : parseInt(String(score)) || 0,
     overallFeedback,
     transcript,
     recordingUrl,
@@ -315,11 +326,64 @@ async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
   }
 }
 
+async function updateMissingEvaluations() {
+  console.log('  Checking for records with missing evaluations...');
+  
+  try {
+    // Get records with score = 0
+    const result = await pool.query(
+      `SELECT id, student_name, subject, timestamp FROM viva_results 
+       WHERE score = 0 OR score IS NULL ORDER BY timestamp DESC LIMIT 200`
+    );
+    
+    if (result.rows.length === 0) {
+      console.log('  No records with missing evaluations');
+      return 0;
+    }
+    
+    console.log(`  Found ${result.rows.length} records with missing evaluations`);
+    let updated = 0;
+    
+    for (const row of result.rows) {
+      const sheetMatch = findMatchingSheetEvaluation(
+        row.student_name, 
+        row.subject, 
+        new Date(row.timestamp)
+      );
+      
+      if (sheetMatch && sheetMatch.score > 0) {
+        await pool.query(
+          `UPDATE viva_results SET 
+           score = $1, questions_answered = $2, overall_feedback = $3, evaluation = $4
+           WHERE id = $5`,
+          [
+            sheetMatch.score,
+            sheetMatch.questionsAnswered,
+            sheetMatch.overallFeedback,
+            sheetMatch.evaluation ? JSON.stringify(sheetMatch.evaluation) : null,
+            row.id
+          ]
+        );
+        console.log(`    Updated ${row.student_name}: ${sheetMatch.score}%`);
+        updated++;
+      }
+    }
+    
+    return updated;
+  } catch (error: any) {
+    console.log(`  Error updating missing evaluations: ${error.message}`);
+    return 0;
+  }
+}
+
 async function syncFromVapi() {
   const startTime = new Date();
   console.log(`[${startTime.toISOString()}] Starting VAPI sync...`);
   
   try {
+    // Load Google Sheets evaluations first for fallback
+    await fetchSheetsEvaluations();
+    
     const calls = await fetchVapiCalls();
     console.log(`  Fetched ${calls.length} calls from VAPI`);
     
@@ -427,9 +491,20 @@ async function main() {
   console.log('Auto-sync started. Syncing from VAPI every 5 minutes...');
   
   await addVapiCallIdColumn();
+  
+  // Initial sync
   await syncFromVapi();
   
-  setInterval(syncFromVapi, SYNC_INTERVAL_MS);
+  // Update records with missing evaluations from Google Sheets
+  const updatedCount = await updateMissingEvaluations();
+  if (updatedCount > 0) {
+    console.log(`  Updated ${updatedCount} records with evaluations from Google Sheets`);
+  }
+  
+  setInterval(async () => {
+    await syncFromVapi();
+    await updateMissingEvaluations();
+  }, SYNC_INTERVAL_MS);
 }
 
 main().catch(console.error);
