@@ -170,16 +170,16 @@ function StudentFormContent() {
                 />
 
                 <div>
-                  <FormLabel>Subject</FormLabel>
-                  <div className="mt-2 px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
+                  <label className="text-sm font-medium leading-none">Subject</label>
+                  <div className="mt-2 px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
                     {subject}
                   </div>
                 </div>
 
                 {topic && (
                   <div>
-                    <FormLabel>Topic</FormLabel>
-                    <div className="mt-2 px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
+                    <label className="text-sm font-medium leading-none">Topic</label>
+                    <div className="mt-2 px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
                       {topic.includes(',') ? topic.split(',').join(', ') : topic}
                     </div>
                   </div>
