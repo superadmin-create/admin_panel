@@ -79,10 +79,10 @@ function StudentFormContent() {
       }
 
       const studentData = {
-        fullName: verifyResult.student?.name || values.fullName,
-        email: verifyResult.student?.email || values.email,
-        phone: verifyResult.student?.phone || values.phone,
-        studentId: verifyResult.student?.id,
+        fullName: verifyResult.studentData?.name || values.fullName,
+        email: verifyResult.studentData?.email || values.email,
+        phone: verifyResult.studentData?.phone || values.phone,
+        studentId: verifyResult.studentData?.id,
         subject: subject,
         topic: topic || undefined,
       };
