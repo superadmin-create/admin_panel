@@ -51,6 +51,11 @@ Database tables:
 ## Environment Variables
 - `DATABASE_URL` - PostgreSQL connection string
 - `OPENAI_API_KEY` - For AI-powered viva question generation
+- `EDMINGLE_API_KEY` - Edmingle API key for student verification
+- `EDMINGLE_ORG_ID` - Edmingle organization ID
+- `EDMINGLE_INSTITUTION_ID` - Edmingle institution ID
+- `NEXT_PUBLIC_VAPI_PUBLIC_KEY` - VAPI public key (client-side)
+- `NEXT_PUBLIC_VAPI_ASSISTANT_ID` - VAPI assistant ID for viva sessions
 - Google Sheets OAuth handled via Replit connector
 
 ## API Endpoints
@@ -70,9 +75,16 @@ Database tables:
 - `GET /api/subjects` - List all subjects
 - `GET /api/topics` - List all topics
 
+### Student Verification
+- `POST /api/verify-student` - Verify student against Edmingle before allowing viva access
+  - Required: `email` or `phone`
+  - Returns: `verified: true/false`, student info if found
+
 ## Recent Changes
+- 2026-02-02: Added Edmingle student verification - students must be registered in Edmingle to access viva
+- 2026-02-02: Integrated student viva flow into admin panel at /student routes (registration, viva, complete)
 - 2026-02-02: Added "Generate Viva Link" feature - teachers can create shareable links for students
-- 2026-02-02: Added student viva entry page at /viva/start - students enter name/email, subject/topic are locked
+- 2026-02-02: Added student viva entry page at /student - students enter name/email, subject/topic are locked
 - 2026-02-02: Dashboard now shows ONLY the logged-in teacher's data (subjects, topics, viva results)
 - 2026-02-02: Auto-sync now merges evaluation data from VAPI (structuredData) OR Google Sheets (fallback)
 - 2026-02-02: Added function to update existing records with missing evaluation scores from Google Sheets

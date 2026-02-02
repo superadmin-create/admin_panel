@@ -51,10 +51,38 @@ function StudentFormContent() {
     setIsLoading(true);
 
     try {
+      const verifyResponse = await fetch("/api/verify-student", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: values.email,
+          phone: values.phone,
+        }),
+      });
+
+      const verifyResult = await verifyResponse.json();
+
+      if (!verifyResult.success) {
+        form.setError("root", {
+          message: verifyResult.message || "Verification failed. Please try again.",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      if (!verifyResult.verified) {
+        form.setError("root", {
+          message: verifyResult.message || "You are not registered with this institution. Please contact your teacher.",
+        });
+        setIsLoading(false);
+        return;
+      }
+
       const studentData = {
-        fullName: values.fullName,
-        email: values.email,
-        phone: values.phone,
+        fullName: verifyResult.student?.name || values.fullName,
+        email: verifyResult.student?.email || values.email,
+        phone: verifyResult.student?.phone || values.phone,
+        studentId: verifyResult.student?.id,
         subject: subject,
         topic: topic || undefined,
       };
