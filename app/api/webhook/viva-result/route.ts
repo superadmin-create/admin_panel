@@ -111,15 +111,18 @@ async function saveToDatabase(result: any) {
   }
 }
 
-function parseSystemPrompt(messages: any[]): { studentName?: string; subject?: string; topics?: string } {
+function parseSystemPrompt(messages: any[]): { studentName?: string; studentEmail?: string; subject?: string; topics?: string } {
   const systemMsg = messages?.find((m: any) => m.role === 'system');
   if (!systemMsg?.message) return {};
   
   const content = systemMsg.message;
-  const result: { studentName?: string; subject?: string; topics?: string } = {};
+  const result: { studentName?: string; studentEmail?: string; subject?: string; topics?: string } = {};
   
   const nameMatch = content.match(/Name:\s*([^\n]+)/i);
   if (nameMatch) result.studentName = nameMatch[1].trim();
+  
+  const emailMatch = content.match(/Email:\s*([^\n\s]+@[^\n\s]+)/i);
+  if (emailMatch) result.studentEmail = emailMatch[1].trim();
   
   const subjectMatch = content.match(/Subject:\s*([^\n]+)/i);
   if (subjectMatch) result.subject = subjectMatch[1].trim();
@@ -139,7 +142,7 @@ function normalizeVivaResult(payload: any): any {
     
     return {
       studentName: structuredData.studentName || parsedPrompt.studentName || call.customer?.name || 'Unknown Student',
-      studentEmail: structuredData.studentEmail || structuredData.email || '',
+      studentEmail: structuredData.studentEmail || structuredData.email || parsedPrompt.studentEmail || call.customer?.email || '',
       subject: structuredData.subject || parsedPrompt.subject || call.assistant?.name || 'Unknown Subject',
       topics: structuredData.topics || structuredData.topic || parsedPrompt.topics || '',
       questionsAnswered: structuredData.questionsAnswered || structuredData.totalQuestions || 0,
@@ -159,7 +162,7 @@ function normalizeVivaResult(payload: any): any {
     
     return {
       studentName: structuredData.studentName || parsedPrompt.studentName || payload.customer?.name || 'Unknown Student',
-      studentEmail: structuredData.studentEmail || structuredData.email || '',
+      studentEmail: structuredData.studentEmail || structuredData.email || parsedPrompt.studentEmail || payload.customer?.email || '',
       subject: structuredData.subject || parsedPrompt.subject || payload.assistant?.name || 'Unknown Subject',
       topics: structuredData.topics || structuredData.topic || parsedPrompt.topics || '',
       questionsAnswered: structuredData.questionsAnswered || structuredData.totalQuestions || 0,

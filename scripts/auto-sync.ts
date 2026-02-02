@@ -217,7 +217,7 @@ async function fetchVapiCalls(): Promise<VapiCall[]> {
   return allCalls;
 }
 
-function parseSystemPrompt(call: VapiCall): { studentName?: string; subject?: string; topics?: string } {
+function parseSystemPrompt(call: VapiCall): { studentName?: string; studentEmail?: string; subject?: string; topics?: string } {
   // Look for the system message which contains student info
   const messages = (call as any).messages || [];
   const systemMsg = messages.find((m: any) => m.role === 'system');
@@ -225,11 +225,15 @@ function parseSystemPrompt(call: VapiCall): { studentName?: string; subject?: st
   if (!systemMsg?.message) return {};
   
   const content = systemMsg.message;
-  const result: { studentName?: string; subject?: string; topics?: string } = {};
+  const result: { studentName?: string; studentEmail?: string; subject?: string; topics?: string } = {};
   
   // Parse "Name: Anuj Dicholekar"
   const nameMatch = content.match(/Name:\s*([^\n]+)/i);
   if (nameMatch) result.studentName = nameMatch[1].trim();
+  
+  // Parse "Email: student@example.com"
+  const emailMatch = content.match(/Email:\s*([^\n\s]+@[^\n\s]+)/i);
+  if (emailMatch) result.studentEmail = emailMatch[1].trim();
   
   // Parse "Subject: Finance"
   const subjectMatch = content.match(/Subject:\s*([^\n]+)/i);
@@ -253,7 +257,9 @@ function extractVivaData(call: VapiCall) {
                       'Unknown Student';
   
   const studentEmail = structuredData.studentEmail || 
-                       structuredData.email || 
+                       structuredData.email ||
+                       parsedPrompt.studentEmail ||
+                       (call.customer as any)?.email ||
                        '';
   
   const subject = structuredData.subject || 
