@@ -62,7 +62,8 @@ export default function StudentsPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/students");
+      const teacherEmail = localStorage.getItem("teacherEmail") || "";
+      const response = await fetch(`/api/students?teacherEmail=${encodeURIComponent(teacherEmail)}`);
       const data = await response.json();
 
       if (!response.ok || !data.success) {

@@ -6,6 +6,16 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const teacherEmail = searchParams.get("teacherEmail");
 
+    // Only return students for the logged-in teacher
+    if (!teacherEmail) {
+      return NextResponse.json({
+        success: true,
+        data: [],
+        count: 0,
+        source: 'database'
+      });
+    }
+
     let query = `
       SELECT 
         student_name as name,
