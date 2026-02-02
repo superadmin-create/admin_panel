@@ -58,3 +58,4 @@ build = ["npm", "run", "build"]
 
 [userenv.shared]
 NEXT_PUBLIC_VAPI_PUBLIC_KEY = "5b87b692-58cd-4c05-8c43-8f7f308ec877"
+NEXT_PUBLIC_VAPI_ASSISTANT_ID = "0f33a98c-8524-4e0c-a092-d412f0667e1b"
