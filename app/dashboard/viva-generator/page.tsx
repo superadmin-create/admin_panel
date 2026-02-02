@@ -39,6 +39,8 @@ import {
   Tag,
   Loader2,
   Settings2,
+  Link,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -92,6 +94,9 @@ export default function VivaGeneratorPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [vivaLink, setVivaLink] = useState<string>("");
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // State for subjects and topics from database
   const [subjectsList, setSubjectsList] = useState<Subject[]>([]);
@@ -335,6 +340,34 @@ export default function VivaGeneratorPage() {
     }
   };
 
+  const generateVivaLink = () => {
+    if (!subject) {
+      setError("Please select a subject first");
+      return;
+    }
+    
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const params = new URLSearchParams();
+    params.set('subject', subject);
+    if (selectedTopic && selectedTopic !== 'all') {
+      params.set('topic', selectedTopic);
+    } else if (selectedTopic === 'all' && filteredTopics.length > 0) {
+      params.set('topic', filteredTopics.map(t => t.name).join(','));
+    }
+    
+    const link = `${baseUrl}/viva/start?${params.toString()}`;
+    setVivaLink(link);
+    setLinkCopied(false);
+  };
+
+  const copyVivaLink = () => {
+    if (vivaLink) {
+      navigator.clipboard.writeText(vivaLink);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 3000);
+    }
+  };
+
   const saveToViva = async () => {
     if (!generatedViva) return;
 
@@ -507,6 +540,85 @@ export default function VivaGeneratorPage() {
                     </Badge>
                   )}
                 </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Generate Viva Link Section */}
+        <Card className="animate-fade-in-up border-green-200 bg-gradient-to-r from-green-50 to-transparent">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-green-100">
+                <Link className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <CardTitle>Generate Student Viva Link</CardTitle>
+                <CardDescription>
+                  Create a shareable link for students to take their viva with the selected subject and topic
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-3">
+              <Button 
+                onClick={generateVivaLink}
+                disabled={!subject}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <Link className="h-4 w-4 mr-2" />
+                Generate Viva Link
+              </Button>
+              {!subject && (
+                <p className="text-sm text-muted-foreground flex items-center">
+                  Select a subject above to generate a link
+                </p>
+              )}
+            </div>
+            
+            {vivaLink && (
+              <div className="p-4 rounded-lg bg-white border-2 border-green-200 space-y-3">
+                <div className="flex items-center gap-2 text-green-700">
+                  <CheckCircle2 className="h-5 w-5" />
+                  <span className="font-medium">Viva Link Generated!</span>
+                </div>
+                <div className="flex gap-2">
+                  <Input 
+                    value={vivaLink} 
+                    readOnly 
+                    className="flex-1 bg-gray-50 text-sm"
+                  />
+                  <Button 
+                    variant="outline" 
+                    onClick={copyVivaLink}
+                    className={linkCopied ? "bg-green-100 text-green-700 border-green-300" : ""}
+                  >
+                    {linkCopied ? (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 mr-1" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-4 w-4 mr-1" />
+                        Copy
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => window.open(vivaLink, '_blank')}
+                  >
+                    <ExternalLink className="h-4 w-4 mr-1" />
+                    Open
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Share this link with students. They will enter their name and email, then start the viva for <strong>{subject}</strong>
+                  {selectedTopic && selectedTopic !== 'all' && <> - <strong>{selectedTopic}</strong></>}
+                  {selectedTopic === 'all' && <> (All Topics)</>}
+                </p>
               </div>
             )}
           </CardContent>
