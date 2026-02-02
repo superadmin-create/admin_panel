@@ -31,10 +31,24 @@ export default function DashboardPage() {
     recentResults: [] as VivaResult[],
   });
 
+  // Get teacher email from localStorage
+  const getTeacherEmail = () => {
+    const stored = localStorage.getItem("teacherInfo");
+    if (stored) {
+      try {
+        const info = JSON.parse(stored);
+        return info.email || info.username || "";
+      } catch {
+        return "";
+      }
+    }
+    return "";
+  };
+
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const teacherEmail = localStorage.getItem("teacherEmail") || "";
+        const teacherEmail = getTeacherEmail();
         const response = await fetch(`/api/stats?teacherEmail=${encodeURIComponent(teacherEmail)}`);
         const data = await response.json();
 

@@ -57,12 +57,26 @@ export default function StudentsPage() {
   const [selectedSubject, setSelectedSubject] = useState("All Subjects");
   const [selectedStatus, setSelectedStatus] = useState("All Status");
 
+  // Get teacher email from localStorage
+  const getTeacherEmail = () => {
+    const stored = localStorage.getItem("teacherInfo");
+    if (stored) {
+      try {
+        const info = JSON.parse(stored);
+        return info.email || info.username || "";
+      } catch {
+        return "";
+      }
+    }
+    return "";
+  };
+
   // Fetch data from API
   const fetchStudents = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const teacherEmail = localStorage.getItem("teacherEmail") || "";
+      const teacherEmail = getTeacherEmail();
       const response = await fetch(`/api/students?teacherEmail=${encodeURIComponent(teacherEmail)}`);
       const data = await response.json();
 
