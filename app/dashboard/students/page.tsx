@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import {
   Card,
@@ -30,12 +31,12 @@ import {
 import {
   Search,
   Download,
-  MoreHorizontal,
   Mail,
   Eye,
   Loader2,
   RefreshCw,
   XCircle,
+  ClipboardList,
 } from "lucide-react";
 
 interface StudentSummary {
@@ -50,12 +51,51 @@ interface StudentSummary {
 }
 
 export default function StudentsPage() {
+  const router = useRouter();
   const [students, setStudents] = useState<StudentSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("All Subjects");
   const [selectedStatus, setSelectedStatus] = useState("All Status");
+
+  // Export students to CSV
+  const exportToCSV = () => {
+    const headers = ['Name', 'Email', 'Subjects', 'Vivas Completed', 'Avg Score', 'Last Viva', 'Status'];
+    const csvData = filteredStudents.map(s => [
+      s.name,
+      s.email,
+      s.subjects.join('; '),
+      s.vivasCompleted,
+      s.averageScore + '%',
+      s.lastVivaDate || '-',
+      s.status
+    ]);
+    const csv = [
+      headers.join(','),
+      ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `students-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  };
+
+  // View student results
+  const viewStudentResults = (studentName: string) => {
+    router.push(`/dashboard/results?student=${encodeURIComponent(studentName)}`);
+  };
+
+  // Send email to student
+  const sendEmail = (email: string, name: string) => {
+    if (email) {
+      window.location.href = `mailto:${email}?subject=Regarding your AI Viva Performance`;
+    } else {
+      alert(`No email address available for ${name}`);
+    }
+  };
 
   // Get teacher email from localStorage
   const getTeacherEmail = () => {
@@ -264,7 +304,7 @@ export default function StudentsPage() {
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Refresh
                 </Button>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" onClick={exportToCSV}>
                   <Download className="h-4 w-4 mr-2" />
                   Export
                 </Button>
@@ -398,6 +438,8 @@ export default function StudentsPage() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
+                              title="View Results"
+                              onClick={() => viewStudentResults(student.name)}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
@@ -405,6 +447,8 @@ export default function StudentsPage() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
+                              title="Send Email"
+                              onClick={() => sendEmail(student.email, student.name)}
                             >
                               <Mail className="h-4 w-4" />
                             </Button>
@@ -412,8 +456,10 @@ export default function StudentsPage() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
+                              title="View Viva History"
+                              onClick={() => viewStudentResults(student.name)}
                             >
-                              <MoreHorizontal className="h-4 w-4" />
+                              <ClipboardList className="h-4 w-4" />
                             </Button>
                           </div>
                         </TableCell>
