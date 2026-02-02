@@ -71,6 +71,8 @@ Database tables:
 - `GET /api/topics` - List all topics
 
 ## Recent Changes
+- 2026-02-02: Added "Generate Viva Link" feature - teachers can create shareable links for students
+- 2026-02-02: Added student viva entry page at /viva/start - students enter name/email, subject/topic are locked
 - 2026-02-02: Dashboard now shows ONLY the logged-in teacher's data (subjects, topics, viva results)
 - 2026-02-02: Auto-sync now merges evaluation data from VAPI (structuredData) OR Google Sheets (fallback)
 - 2026-02-02: Added function to update existing records with missing evaluation scores from Google Sheets
