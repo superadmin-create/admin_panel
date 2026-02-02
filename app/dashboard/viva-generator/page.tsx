@@ -354,9 +354,7 @@ export default function VivaGeneratorPage() {
       params.set('topic', filteredTopics.map(t => t.name).join(','));
     }
     
-    // Link to integrated student page
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    const link = `${baseUrl}/student?${params.toString()}`;
+    const link = `https://replit.com/join/lqkcfpedxf-leapupindia?${params.toString()}`;
     setVivaLink(link);
     setLinkCopied(false);
   };
