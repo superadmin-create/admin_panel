@@ -144,15 +144,65 @@ async function appendToGoogleSheet(data: any): Promise<boolean> {
   }
 }
 
+// Update specific cells in Google Sheets (for syncing evaluations back)
+async function updateGoogleSheetRow(rowIndex: number, updates: {
+  score?: number;
+  questionsAnswered?: number;
+  overallFeedback?: string;
+  studentEmail?: string;
+}): Promise<boolean> {
+  try {
+    const accessToken = await getGoogleSheetsAccessToken();
+    if (!accessToken) return false;
+
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+
+    const updateData: { range: string; values: string[][] }[] = [];
+    
+    // Column C = email (index 2), G = questionsAnswered (index 6), H = score (index 7), I = overallFeedback (index 8)
+    if (updates.studentEmail) {
+      updateData.push({ range: `'Viva Results'!C${rowIndex}`, values: [[updates.studentEmail]] });
+    }
+    if (updates.questionsAnswered !== undefined) {
+      updateData.push({ range: `'Viva Results'!G${rowIndex}`, values: [[updates.questionsAnswered.toString()]] });
+    }
+    if (updates.score !== undefined) {
+      updateData.push({ range: `'Viva Results'!H${rowIndex}`, values: [[updates.score.toString()]] });
+    }
+    if (updates.overallFeedback) {
+      updateData.push({ range: `'Viva Results'!I${rowIndex}`, values: [[updates.overallFeedback]] });
+    }
+
+    if (updateData.length > 0) {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: STUDENT_DATA_SHEET_ID,
+        requestBody: {
+          valueInputOption: 'RAW',
+          data: updateData
+        }
+      });
+      return true;
+    }
+    return false;
+  } catch (error: any) {
+    console.log(`  Sheet update error: ${error.message}`);
+    return false;
+  }
+}
+
 // Fetch evaluation data from Google Sheets
 interface SheetEvaluation {
   studentName: string;
+  studentEmail: string;
   subject: string;
   score: number;
   questionsAnswered: number;
   overallFeedback: string;
   evaluation?: any;
   timestamp: string;
+  rowIndex: number;
 }
 
 let sheetsEvaluationCache: SheetEvaluation[] | null = null;
@@ -177,17 +227,21 @@ async function fetchSheetsEvaluations(): Promise<SheetEvaluation[]> {
     });
 
     const rows = response.data.values || [];
-    sheetsEvaluationCache = rows.map(row => ({
+    // Column order: A=timestamp, B=name, C=email, D=phone, E=subject, F=topics, 
+    //               G=questionsAnswered, H=score, I=overallFeedback, J=transcript, K=recording, L=vapiCallId
+    sheetsEvaluationCache = rows.map((row, index) => ({
       timestamp: row[0] || '',
       studentName: row[1] || '',
-      subject: row[3] || '',
-      questionsAnswered: parseInt(row[5]) || 0,
-      score: parseInt(row[6]) || 0,
-      overallFeedback: row[7] || '',
-      evaluation: row[10] ? JSON.parse(row[10]) : null
-    })).filter(r => r.score > 0 || r.questionsAnswered > 0);
+      studentEmail: row[2] || '',
+      subject: row[4] || '',          // Column E (index 4)
+      questionsAnswered: parseInt(row[6]) || 0,  // Column G (index 6)
+      score: parseInt(row[7]) || 0,   // Column H (index 7)
+      overallFeedback: row[8] || '',  // Column I (index 8)
+      evaluation: null,
+      rowIndex: index + 2  // Row number in sheet (1-indexed, +1 for header)
+    })).filter(r => r.studentName && r.studentName.toLowerCase() !== 'unknown student');
 
-    console.log(`  Loaded ${sheetsEvaluationCache.length} evaluations from Google Sheets`);
+    console.log(`  Loaded ${sheetsEvaluationCache.length} rows from Google Sheets`);
     return sheetsEvaluationCache;
   } catch (error: any) {
     console.log(`  Sheets fetch error: ${error.message}`);
@@ -199,18 +253,57 @@ function findMatchingSheetEvaluation(studentName: string, subject: string, times
   if (!sheetsEvaluationCache) return null;
   
   const targetTime = timestamp.getTime();
-  const fiveMinutes = 5 * 60 * 1000;
+  const tenMinutes = 10 * 60 * 1000;
   
-  // Find matching record by student name and subject within 5 minutes
+  // Find matching record by student name and subject within time window
   return sheetsEvaluationCache.find(entry => {
     const nameMatch = entry.studentName.toLowerCase().includes(studentName.toLowerCase().split(' ')[0]) ||
                       studentName.toLowerCase().includes(entry.studentName.toLowerCase().split(' ')[0]);
     const subjectMatch = entry.subject.toLowerCase() === subject.toLowerCase();
     const entryTime = new Date(entry.timestamp).getTime();
-    const timeMatch = Math.abs(entryTime - targetTime) < fiveMinutes;
+    const timeMatch = Math.abs(entryTime - targetTime) < tenMinutes;
     
     return nameMatch && subjectMatch && timeMatch;
   }) || null;
+}
+
+// Sync emails from database to Google Sheets for rows missing email
+async function syncEmailsToSheets() {
+  if (!sheetsEvaluationCache) return 0;
+  
+  let synced = 0;
+  try {
+    // Get records from database that have emails
+    const result = await pool.query(
+      `SELECT student_name, student_email, subject, timestamp FROM viva_results 
+       WHERE student_email IS NOT NULL AND student_email != ''
+       ORDER BY timestamp DESC LIMIT 100`
+    );
+    
+    for (const dbRow of result.rows) {
+      // Find matching sheet row that's missing email
+      const sheetMatch = sheetsEvaluationCache.find(entry => {
+        const nameMatch = entry.studentName.toLowerCase() === dbRow.student_name.toLowerCase();
+        const subjectMatch = entry.subject.toLowerCase() === dbRow.subject.toLowerCase();
+        const noEmail = !entry.studentEmail || entry.studentEmail === '';
+        return nameMatch && subjectMatch && noEmail;
+      });
+      
+      if (sheetMatch && sheetMatch.rowIndex > 0) {
+        const updated = await updateGoogleSheetRow(sheetMatch.rowIndex, {
+          studentEmail: dbRow.student_email
+        });
+        if (updated) {
+          synced++;
+          console.log(`    [Sheets] Synced email for ${dbRow.student_name} to row ${sheetMatch.rowIndex}`);
+        }
+      }
+    }
+  } catch (error: any) {
+    console.log(`  Error syncing emails to sheets: ${error.message}`);
+  }
+  
+  return synced;
 }
 
 interface VapiCall {
@@ -406,7 +499,7 @@ async function updateMissingEvaluations() {
   try {
     // Get records with score = 0 that have transcripts (we need transcripts for AI evaluation)
     const result = await pool.query(
-      `SELECT id, student_name, subject, timestamp, transcript FROM viva_results 
+      `SELECT id, student_name, student_email, subject, timestamp, transcript, vapi_call_id FROM viva_results 
        WHERE (score = 0 OR score IS NULL) 
        AND student_name != 'Unknown Student'
        AND subject != 'Unknown Subject'
@@ -422,6 +515,7 @@ async function updateMissingEvaluations() {
     console.log(`  Found ${result.rows.length} records with missing evaluations`);
     let updatedFromSheets = 0;
     let updatedFromAI = 0;
+    let sheetsSynced = 0;
     
     for (const row of result.rows) {
       // First try Google Sheets fallback
@@ -432,15 +526,19 @@ async function updateMissingEvaluations() {
       );
       
       if (sheetMatch && sheetMatch.score > 0) {
+        // Sync email from Sheets if we have it there but not in DB
+        const emailToUse = row.student_email || sheetMatch.studentEmail || '';
+        
         await pool.query(
           `UPDATE viva_results SET 
-           score = $1, questions_answered = $2, overall_feedback = $3, evaluation = $4
-           WHERE id = $5`,
+           score = $1, questions_answered = $2, overall_feedback = $3, evaluation = $4, student_email = $5
+           WHERE id = $6`,
           [
             sheetMatch.score,
             sheetMatch.questionsAnswered,
             sheetMatch.overallFeedback,
             sheetMatch.evaluation ? JSON.stringify(sheetMatch.evaluation) : null,
+            emailToUse,
             row.id
           ]
         );
@@ -468,11 +566,24 @@ async function updateMissingEvaluations() {
           );
           console.log(`    [AI] Evaluated ${row.student_name}: ${aiEval.score}%`);
           updatedFromAI++;
+          
+          // Also sync this AI evaluation to Google Sheets
+          if (sheetMatch && sheetMatch.rowIndex > 0) {
+            const updated = await updateGoogleSheetRow(sheetMatch.rowIndex, {
+              score: aiEval.score,
+              questionsAnswered: aiEval.questionsAnswered,
+              overallFeedback: aiEval.overallFeedback
+            });
+            if (updated) {
+              sheetsSynced++;
+              console.log(`    [Sheets] Synced evaluation to row ${sheetMatch.rowIndex}`);
+            }
+          }
         }
       }
     }
     
-    console.log(`  Updated: ${updatedFromSheets} from Sheets, ${updatedFromAI} from AI`);
+    console.log(`  Updated: ${updatedFromSheets} from Sheets, ${updatedFromAI} from AI, ${sheetsSynced} synced to Sheets`);
     return updatedFromSheets + updatedFromAI;
   } catch (error: any) {
     console.log(`  Error updating missing evaluations: ${error.message}`);
@@ -612,12 +723,23 @@ async function main() {
   // Update records with missing evaluations from Google Sheets
   const updatedCount = await updateMissingEvaluations();
   if (updatedCount > 0) {
-    console.log(`  Updated ${updatedCount} records with evaluations from Google Sheets`);
+    console.log(`  Updated ${updatedCount} records with evaluations`);
   }
   
+  // Sync emails from DB to Sheets
+  const emailsSynced = await syncEmailsToSheets();
+  if (emailsSynced > 0) {
+    console.log(`  Synced ${emailsSynced} emails to Google Sheets`);
+  }
+  
+  // Clear cache after initial sync so next run gets fresh data
+  sheetsEvaluationCache = null;
+  
   setInterval(async () => {
+    sheetsEvaluationCache = null; // Clear cache for fresh data
     await syncFromVapi();
     await updateMissingEvaluations();
+    await syncEmailsToSheets();
   }, SYNC_INTERVAL_MS);
 }
 
