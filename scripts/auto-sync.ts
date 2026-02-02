@@ -1,11 +1,78 @@
 import { Pool } from 'pg';
 import { google } from 'googleapis';
+import OpenAI from 'openai';
 
 const SYNC_INTERVAL_MS = 5 * 60 * 1000;
 const VAPI_API_URL = 'https://api.vapi.ai';
 const STUDENT_DATA_SHEET_ID = '1dPderiJxJl534xNnzHVVqye9VSx3zZY3ZEgO3vjqpFY';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// AI-powered evaluation function
+async function generateAIEvaluation(transcript: string, subject: string, studentName: string): Promise<{
+  score: number;
+  questionsAnswered: number;
+  overallFeedback: string;
+  evaluation: any;
+} | null> {
+  if (!transcript || transcript.length < 50) {
+    return null;
+  }
+  
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert viva examiner. Analyze the following viva transcript and provide an evaluation. 
+The viva is for ${subject} with student ${studentName}.
+
+Evaluate based on:
+1. Knowledge accuracy and depth
+2. Clarity of explanations
+3. Ability to answer follow-up questions
+4. Overall understanding of the topic
+
+Respond in JSON format only:
+{
+  "score": <number 0-100>,
+  "questionsAnswered": <number of questions the student answered>,
+  "overallFeedback": "<2-3 sentence summary of performance>",
+  "evaluation": {
+    "knowledge": <score 0-100>,
+    "clarity": <score 0-100>,
+    "depth": <score 0-100>,
+    "strengths": ["<strength1>", "<strength2>"],
+    "improvements": ["<area1>", "<area2>"]
+  }
+}`
+        },
+        {
+          role: 'user',
+          content: `Transcript:\n${transcript.substring(0, 8000)}`
+        }
+      ],
+      response_format: { type: 'json_object' },
+      max_tokens: 500
+    });
+    
+    const content = response.choices[0]?.message?.content;
+    if (!content) return null;
+    
+    const result = JSON.parse(content);
+    return {
+      score: Math.min(100, Math.max(0, parseInt(result.score) || 0)),
+      questionsAnswered: parseInt(result.questionsAnswered) || 0,
+      overallFeedback: result.overallFeedback || '',
+      evaluation: result.evaluation || null
+    };
+  } catch (error) {
+    console.log(`    -> AI evaluation failed for ${studentName}:`, (error as Error).message);
+    return null;
+  }
+}
 
 async function getGoogleSheetsAccessToken(): Promise<string | null> {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
@@ -316,7 +383,8 @@ function extractVivaData(call: VapiCall) {
     transcript,
     recordingUrl,
     evaluation,
-    vapiCallId: call.id
+    vapiCallId: call.id,
+    needsAIEvaluation: score === 0 && transcript.length > 100
   };
 }
 
@@ -336,10 +404,14 @@ async function updateMissingEvaluations() {
   console.log('  Checking for records with missing evaluations...');
   
   try {
-    // Get records with score = 0
+    // Get records with score = 0 that have transcripts (we need transcripts for AI evaluation)
     const result = await pool.query(
-      `SELECT id, student_name, subject, timestamp FROM viva_results 
-       WHERE score = 0 OR score IS NULL ORDER BY timestamp DESC LIMIT 200`
+      `SELECT id, student_name, subject, timestamp, transcript FROM viva_results 
+       WHERE (score = 0 OR score IS NULL) 
+       AND student_name != 'Unknown Student'
+       AND subject != 'Unknown Subject'
+       AND subject != 'Transient Assistant'
+       ORDER BY timestamp DESC LIMIT 50`
     );
     
     if (result.rows.length === 0) {
@@ -348,9 +420,11 @@ async function updateMissingEvaluations() {
     }
     
     console.log(`  Found ${result.rows.length} records with missing evaluations`);
-    let updated = 0;
+    let updatedFromSheets = 0;
+    let updatedFromAI = 0;
     
     for (const row of result.rows) {
+      // First try Google Sheets fallback
       const sheetMatch = findMatchingSheetEvaluation(
         row.student_name, 
         row.subject, 
@@ -370,12 +444,36 @@ async function updateMissingEvaluations() {
             row.id
           ]
         );
-        console.log(`    Updated ${row.student_name}: ${sheetMatch.score}%`);
-        updated++;
+        console.log(`    [Sheets] Updated ${row.student_name}: ${sheetMatch.score}%`);
+        updatedFromSheets++;
+        continue;
+      }
+      
+      // If no sheet match and we have a transcript, use AI evaluation
+      if (row.transcript && row.transcript.length > 100) {
+        const aiEval = await generateAIEvaluation(row.transcript, row.subject, row.student_name);
+        
+        if (aiEval && aiEval.score > 0) {
+          await pool.query(
+            `UPDATE viva_results SET 
+             score = $1, questions_answered = $2, overall_feedback = $3, evaluation = $4
+             WHERE id = $5`,
+            [
+              aiEval.score,
+              aiEval.questionsAnswered,
+              aiEval.overallFeedback,
+              aiEval.evaluation ? JSON.stringify(aiEval.evaluation) : null,
+              row.id
+            ]
+          );
+          console.log(`    [AI] Evaluated ${row.student_name}: ${aiEval.score}%`);
+          updatedFromAI++;
+        }
       }
     }
     
-    return updated;
+    console.log(`  Updated: ${updatedFromSheets} from Sheets, ${updatedFromAI} from AI`);
+    return updatedFromSheets + updatedFromAI;
   } catch (error: any) {
     console.log(`  Error updating missing evaluations: ${error.message}`);
     return 0;
