@@ -53,3 +53,8 @@ externalPort = 80
 deploymentTarget = "autoscale"
 run = ["npm", "run", "start"]
 build = ["npm", "run", "build"]
+
+[userenv]
+
+[userenv.shared]
+NEXT_PUBLIC_VAPI_PUBLIC_KEY = "5b87b692-58cd-4c05-8c43-8f7f308ec877"
