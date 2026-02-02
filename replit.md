@@ -56,7 +56,9 @@ Database tables:
 - `EDMINGLE_INSTITUTION_ID` - Edmingle institution ID
 - `NEXT_PUBLIC_VAPI_PUBLIC_KEY` - VAPI public key (client-side)
 - `NEXT_PUBLIC_VAPI_ASSISTANT_ID` - VAPI assistant ID for viva sessions
-- Google Sheets OAuth handled via Replit connector
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL` - Service account for student data writes to Google Sheets
+- `GOOGLE_PRIVATE_KEY` - Service account private key for Google Sheets
+- Google Sheets OAuth handled via Replit connector (for teacher operations)
 
 ## API Endpoints
 

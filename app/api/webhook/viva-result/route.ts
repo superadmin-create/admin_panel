@@ -1,63 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
-import { google } from "googleapis";
+import { appendVivaResultToSheet } from "@/lib/api/sheets-service-account";
 
 export const dynamic = "force-dynamic";
 
-const STUDENT_DATA_SHEET_ID = "1dPderiJxJl534xNnzHVVqye9VSx3zZY3ZEgO3vjqpFY";
-
-async function getAccessToken() {
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-    : null;
-
-  const response = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-sheet',
-    { headers: { 'Accept': 'application/json', 'X_REPLIT_TOKEN': xReplitToken! } }
-  );
-  
-  const data = await response.json();
-  return data.items?.[0]?.settings?.access_token;
-}
-
 async function appendToSheet(result: any) {
   try {
-    const accessToken = await getAccessToken();
-    if (!accessToken) {
-      console.error("No access token for Google Sheets");
-      return false;
-    }
-
-    const oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({ access_token: accessToken });
-    const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
-
-    const timestamp = new Date().toISOString();
-    const values = [[
-      timestamp,
-      result.studentName || '',
-      result.studentEmail || '',
-      result.subject || '',
-      result.topics || '',
-      result.questionsAnswered?.toString() || '0',
-      result.score?.toString() || '0',
-      result.overallFeedback || '',
-      result.transcript || '',
-      result.recordingUrl || '',
-      result.evaluation ? JSON.stringify(result.evaluation) : ''
-    ]];
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: STUDENT_DATA_SHEET_ID,
-      range: "'Viva Results'!A:K",
-      valueInputOption: 'RAW',
-      requestBody: { values }
+    return await appendVivaResultToSheet({
+      studentName: result.studentName || '',
+      studentEmail: result.studentEmail || '',
+      studentPhone: result.studentPhone || '',
+      subject: result.subject || '',
+      topic: result.topics || '',
+      questionsAnswered: result.questionsAnswered,
+      score: result.score,
+      overallFeedback: result.overallFeedback || '',
+      transcript: result.transcript || '',
+      recordingUrl: result.recordingUrl || '',
+      evaluation: result.evaluation,
+      vapiCallId: result.vapiCallId || '',
     });
-
-    return true;
   } catch (error) {
     console.error("Error appending to Google Sheets:", error);
     return false;
