@@ -119,14 +119,14 @@ async function appendToGoogleSheet(data: any): Promise<boolean> {
       data.timestamp.toISOString(),
       data.studentName,
       data.studentEmail,
+      '', // studentPhone (not available from VAPI)
       data.subject,
       data.topics,
       data.questionsAnswered.toString(),
       data.score.toString(),
-      data.overallFeedback,
-      data.transcript,
-      data.recordingUrl,
-      data.evaluation ? JSON.stringify(data.evaluation) : '',
+      data.overallFeedback || '',
+      data.transcript || '',
+      data.recordingUrl || '',
       data.vapiCallId
     ]];
 
