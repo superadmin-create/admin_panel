@@ -179,17 +179,57 @@ function normalizeVivaResult(payload: any): any {
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
+    const messageType = payload.message?.type;
     
     // Log incoming webhook for debugging
     console.log("[Webhook] Received payload type:", 
-      payload.message?.type || (payload.id ? 'vapi-call' : 'direct'));
+      messageType || (payload.id ? 'vapi-call' : 'direct'));
+    
+    // IMPORTANT: Only process valid event types that contain actual viva data
+    // Ignore intermediate VAPI events that don't have student/subject info
+    const ignoredEventTypes = [
+      'speech-update',
+      'conversation-update', 
+      'user-interrupted',
+      'status-update',
+      'hang',
+      'tool-calls',
+      'transfer-destination-request',
+      'voice-input'
+    ];
+    
+    if (messageType && ignoredEventTypes.includes(messageType)) {
+      // Acknowledge the webhook but don't save anything
+      console.log(`[Webhook] Ignoring intermediate event: ${messageType}`);
+      return NextResponse.json({ 
+        success: true, 
+        message: `Acknowledged ${messageType} event (not saved)` 
+      });
+    }
+    
+    // Only process: end-of-call-report, direct VAPI calls, or student app submissions
+    const isEndOfCallReport = messageType === 'end-of-call-report';
+    const isVapiCall = payload.id && payload.status && payload.createdAt;
+    const isStudentAppSubmission = payload.studentName && !messageType && !payload.id;
+    
+    if (!isEndOfCallReport && !isVapiCall && !isStudentAppSubmission) {
+      console.log(`[Webhook] Unknown event type, ignoring:`, messageType || 'unknown');
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Unknown event type (not saved)' 
+      });
+    }
     
     // Normalize the payload to expected format
     const result = normalizeVivaResult(payload);
 
+    // Don't save if no valid student name
     if (!result.studentName || result.studentName === 'Unknown Student') {
-      // Still try to save even without name, but log it
-      console.log("[Webhook] No student name found in payload");
+      console.log("[Webhook] No valid student name, skipping save");
+      return NextResponse.json({ 
+        success: true, 
+        message: 'No student name found (not saved)' 
+      });
     }
 
     const [dbSuccess, sheetSuccess] = await Promise.all([
