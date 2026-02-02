@@ -29,18 +29,25 @@ export async function POST(request: NextRequest) {
     const searchParams = new URLSearchParams({
       apikey: EDMINGLE_API_KEY,
       ORGID: EDMINGLE_ORG_ID,
+      time: Date.now().toString(),
     });
+
+    if (EDMINGLE_INSTITUTION_ID) {
+      searchParams.append("institutionId", EDMINGLE_INSTITUTION_ID);
+    }
 
     if (email) {
       searchParams.append("email", email);
     }
     if (phone) {
       searchParams.append("phone", phone);
+      searchParams.append("mobile", phone);
     }
 
-    const verifyUrl = `${baseUrl}/student/search?${searchParams.toString()}`;
+    const verifyUrl = `${baseUrl}/short/student/list?${searchParams.toString()}`;
     
     console.log(`Verifying student with Edmingle: ${email || phone}`);
+    console.log(`API URL: ${verifyUrl.replace(EDMINGLE_API_KEY, '***')}`);
     
     const response = await fetch(verifyUrl, {
       method: "GET",
