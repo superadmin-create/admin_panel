@@ -354,7 +354,7 @@ export default function VivaGeneratorPage() {
       params.set('topic', filteredTopics.map(t => t.name).join(','));
     }
     
-    const link = `https://replit.com/join/lqkcfpedxf-leapupindia?${params.toString()}`;
+    const link = `https://fa4efc94-8e50-4690-906b-1db8890f5930-00-1fua1gs9falsj.sisko.replit.dev/?${params.toString()}`;
     setVivaLink(link);
     setLinkCopied(false);
   };
