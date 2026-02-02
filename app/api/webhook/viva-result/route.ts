@@ -188,12 +188,17 @@ export async function POST(request: NextRequest) {
     // Normalize the payload to expected format
     const result = normalizeVivaResult(payload);
 
-    // Don't save if no valid student name
-    if (!result.studentName || result.studentName === 'Unknown Student') {
-      console.log("[Webhook] No valid student name, skipping save");
+    // Don't save if no valid student name or invalid subject
+    const invalidNames = ['unknown student', 'unknown', 'transient assistant', '', 'test', 'test user'];
+    const invalidSubjects = ['transient assistant', 'unknown subject', 'unknown', ''];
+    
+    if (!result.studentName || 
+        invalidNames.includes(result.studentName.toLowerCase()) ||
+        invalidSubjects.includes((result.subject || '').toLowerCase())) {
+      console.log("[Webhook] Invalid student name or subject, skipping save");
       return NextResponse.json({ 
         success: true, 
-        message: 'No student name found (not saved)' 
+        message: 'Invalid student/subject (not saved)' 
       });
     }
 

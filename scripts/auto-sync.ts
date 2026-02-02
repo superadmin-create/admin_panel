@@ -509,6 +509,16 @@ async function syncFromVapi() {
 
       const data = extractVivaData(call);
       
+      // Skip invalid entries - Unknown Students, Transient Assistants, etc.
+      const invalidNames = ['unknown student', 'unknown', 'transient assistant', '', 'test', 'test user'];
+      const invalidSubjects = ['transient assistant', 'unknown subject', 'unknown', ''];
+      
+      if (invalidNames.includes(data.studentName.toLowerCase()) || 
+          invalidSubjects.includes(data.subject.toLowerCase())) {
+        skipped++;
+        continue;
+      }
+      
       // Look up teacher email based on subject
       const teacherEmail = await getTeacherEmailForSubject(data.subject);
       
