@@ -103,11 +103,7 @@ Remember to:
             teacherEmail: teacherEmail || '',
           },
         },
-        customer: {
-          name: studentName,
-          email: studentEmail,
-        },
-        ...(phoneNumber && { phoneNumberId: phoneNumber }),
+...(phoneNumber && { phoneNumberId: phoneNumber }),
       }),
     });
 
