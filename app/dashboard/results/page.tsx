@@ -623,16 +623,96 @@ export default function ResultsPage() {
                 )}
               </div>
 
-              {/* Per-Question Feedback */}
+              {/* Recording Link */}
+              {selectedResult.recordingUrl && (
+                <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-950/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-indigo-600" />
+                    Recording
+                  </h4>
+                  <a 
+                    href={selectedResult.recordingUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-sm text-indigo-600 hover:underline break-all"
+                  >
+                    Listen to Viva Recording
+                  </a>
+                </div>
+              )}
+
+              {/* AI Evaluation Summary (from auto-sync) */}
+              {selectedResult.evaluation && (selectedResult.evaluation.knowledge || selectedResult.evaluation.clarity || selectedResult.evaluation.depth) && (
+                <div className="mb-6 space-y-4">
+                  <h4 className="font-semibold text-lg flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-primary" />
+                    Detailed Evaluation
+                  </h4>
+                  
+                  {/* Score Breakdown */}
+                  <div className="grid grid-cols-3 gap-4">
+                    {selectedResult.evaluation.knowledge !== undefined && (
+                      <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800 text-center">
+                        <div className="text-2xl font-bold text-blue-600">{selectedResult.evaluation.knowledge}%</div>
+                        <div className="text-xs text-muted-foreground mt-1">Knowledge</div>
+                      </div>
+                    )}
+                    {selectedResult.evaluation.clarity !== undefined && (
+                      <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800 text-center">
+                        <div className="text-2xl font-bold text-green-600">{selectedResult.evaluation.clarity}%</div>
+                        <div className="text-xs text-muted-foreground mt-1">Clarity</div>
+                      </div>
+                    )}
+                    {selectedResult.evaluation.depth !== undefined && (
+                      <div className="p-4 bg-purple-50 dark:bg-purple-950/20 rounded-lg border border-purple-200 dark:border-purple-800 text-center">
+                        <div className="text-2xl font-bold text-purple-600">{selectedResult.evaluation.depth}%</div>
+                        <div className="text-xs text-muted-foreground mt-1">Depth</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Strengths */}
+                  {selectedResult.evaluation.strengths && selectedResult.evaluation.strengths.length > 0 && (
+                    <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                      <div className="text-xs font-semibold text-green-600 dark:text-green-400 mb-2 uppercase flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Strengths
+                      </div>
+                      <ul className="list-disc list-inside space-y-1">
+                        {selectedResult.evaluation.strengths.map((strength: string, idx: number) => (
+                          <li key={idx} className="text-sm text-foreground">{strength}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Areas for Improvement */}
+                  {selectedResult.evaluation.improvements && selectedResult.evaluation.improvements.length > 0 && (
+                    <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                      <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-2 uppercase flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        Areas for Improvement
+                      </div>
+                      <ul className="list-disc list-inside space-y-1">
+                        {selectedResult.evaluation.improvements.map((improvement: string, idx: number) => (
+                          <li key={idx} className="text-sm text-foreground">{improvement}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Per-Question Feedback (from VAPI structured data) */}
               {selectedResult.evaluation && selectedResult.evaluation.marks && selectedResult.evaluation.feedback ? (
                 <div className="space-y-6">
                   <h4 className="font-semibold text-lg mb-4 flex items-center gap-2">
                     <FileText className="h-5 w-5 text-primary" />
                     Question-by-Question Evaluation
                   </h4>
-                  {selectedResult.evaluation.marks.map((mark, index) => {
+                  {selectedResult.evaluation.marks.map((mark: any, index: number) => {
                     const feedback = selectedResult.evaluation?.feedback?.find(
-                      (f) => f.questionNumber === mark.questionNumber
+                      (f: any) => f.questionNumber === mark.questionNumber
                     );
                     const marksPercentage = (mark.marks / mark.maxMarks) * 100;
                     const markColor =
@@ -707,7 +787,7 @@ export default function ResultsPage() {
                                   Strengths:
                                 </div>
                                 <ul className="list-disc list-inside space-y-1 ml-2">
-                                  {feedback.strengths.map((strength, idx) => (
+                                  {feedback.strengths.map((strength: string, idx: number) => (
                                     <li key={idx} className="text-sm text-foreground">
                                       {strength}
                                     </li>
@@ -724,7 +804,7 @@ export default function ResultsPage() {
                                   Areas for Improvement:
                                 </div>
                                 <ul className="list-disc list-inside space-y-1 ml-2">
-                                  {feedback.weaknesses.map((weakness, idx) => (
+                                  {feedback.weaknesses.map((weakness: string, idx: number) => (
                                     <li key={idx} className="text-sm text-foreground">
                                       {weakness}
                                     </li>
@@ -738,45 +818,27 @@ export default function ResultsPage() {
                     );
                   })}
                 </div>
-              ) : (
-                /* Fallback to transcript view if evaluation not available */
-                <div className="space-y-4">
-                  <h4 className="font-semibold mb-4">Questions & Answers (Transcript)</h4>
-                  {parseTranscript(selectedResult.transcript).length > 0 ? (
-                    parseTranscript(selectedResult.transcript).map((item, index) => (
-                      <div
-                        key={index}
-                        className={`p-3 rounded-lg ${
-                          item.role === "AI"
-                            ? "bg-primary/10 border-l-4 border-primary"
-                            : "bg-muted/50 border-l-4 border-muted-foreground"
-                        }`}
-                      >
-                        <span
-                          className={`text-xs font-semibold uppercase ${
-                            item.role === "AI"
-                              ? "text-primary"
-                              : "text-muted-foreground"
-                          }`}
-                        >
-                          {item.role}
-                        </span>
-                        <p className="mt-1">{item.content}</p>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p>No transcript available for this viva.</p>
-                      {selectedResult.transcript && (
-                        <pre className="mt-4 text-left text-xs bg-muted p-4 rounded overflow-x-auto whitespace-pre-wrap">
-                          {selectedResult.transcript}
-                        </pre>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+              ) : null}
+
+              {/* Full Transcript */}
+              <div className="space-y-4 mt-6">
+                <h4 className="font-semibold text-lg flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5 text-primary" />
+                  Full Transcript
+                </h4>
+                {selectedResult.transcript ? (
+                  <div className="bg-muted/30 rounded-lg border p-4 max-h-96 overflow-y-auto">
+                    <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed">
+                      {selectedResult.transcript}
+                    </pre>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p>No transcript available for this viva.</p>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>

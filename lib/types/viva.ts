@@ -31,12 +31,19 @@ export interface EvaluationFeedback {
 }
 
 export interface VivaEvaluation {
-  marks: EvaluationMarks[];
-  feedback: EvaluationFeedback[];
-  totalMarks: number;
-  maxTotalMarks: number;
-  percentage: number;
-  overallFeedback: string;
+  // VAPI structured data format
+  marks?: EvaluationMarks[];
+  feedback?: EvaluationFeedback[];
+  totalMarks?: number;
+  maxTotalMarks?: number;
+  percentage?: number;
+  overallFeedback?: string;
+  // AI-generated evaluation format (from auto-sync)
+  knowledge?: number;
+  clarity?: number;
+  depth?: number;
+  strengths?: string[];
+  improvements?: string[];
 }
 
 export interface Student {
