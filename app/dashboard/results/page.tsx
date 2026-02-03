@@ -642,62 +642,109 @@ export default function ResultsPage() {
               )}
 
               {/* AI Evaluation Summary (from auto-sync) */}
-              {selectedResult.evaluation && (selectedResult.evaluation.knowledge || selectedResult.evaluation.clarity || selectedResult.evaluation.depth) && (
+              {selectedResult.evaluation && (selectedResult.evaluation.knowledge !== undefined || selectedResult.evaluation.clarity !== undefined || selectedResult.evaluation.depth !== undefined) && (
                 <div className="mb-6 space-y-4">
                   <h4 className="font-semibold text-lg flex items-center gap-2">
                     <TrendingUp className="h-5 w-5 text-primary" />
-                    Detailed Evaluation
+                    Marks Awarded
                   </h4>
                   
-                  {/* Score Breakdown */}
+                  {/* Score Breakdown with Color Coding */}
                   <div className="grid grid-cols-3 gap-4">
-                    {selectedResult.evaluation.knowledge !== undefined && (
-                      <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800 text-center">
-                        <div className="text-2xl font-bold text-blue-600">{selectedResult.evaluation.knowledge}%</div>
-                        <div className="text-xs text-muted-foreground mt-1">Knowledge</div>
-                      </div>
-                    )}
-                    {selectedResult.evaluation.clarity !== undefined && (
-                      <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800 text-center">
-                        <div className="text-2xl font-bold text-green-600">{selectedResult.evaluation.clarity}%</div>
-                        <div className="text-xs text-muted-foreground mt-1">Clarity</div>
-                      </div>
-                    )}
-                    {selectedResult.evaluation.depth !== undefined && (
-                      <div className="p-4 bg-purple-50 dark:bg-purple-950/20 rounded-lg border border-purple-200 dark:border-purple-800 text-center">
-                        <div className="text-2xl font-bold text-purple-600">{selectedResult.evaluation.depth}%</div>
-                        <div className="text-xs text-muted-foreground mt-1">Depth</div>
-                      </div>
-                    )}
+                    {selectedResult.evaluation.knowledge !== undefined && (() => {
+                      const score = selectedResult.evaluation.knowledge;
+                      const colorClass = score >= 80 
+                        ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" 
+                        : score >= 60 
+                        ? "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800"
+                        : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800";
+                      const textColor = score >= 80 
+                        ? "text-green-600 dark:text-green-400" 
+                        : score >= 60 
+                        ? "text-yellow-600 dark:text-yellow-400"
+                        : "text-red-600 dark:text-red-400";
+                      return (
+                        <div className={`p-4 rounded-lg border text-center ${colorClass}`}>
+                          <div className={`text-2xl font-bold ${textColor}`}>{score}%</div>
+                          <div className="text-xs text-muted-foreground mt-1">Knowledge</div>
+                        </div>
+                      );
+                    })()}
+                    {selectedResult.evaluation.clarity !== undefined && (() => {
+                      const score = selectedResult.evaluation.clarity;
+                      const colorClass = score >= 80 
+                        ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" 
+                        : score >= 60 
+                        ? "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800"
+                        : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800";
+                      const textColor = score >= 80 
+                        ? "text-green-600 dark:text-green-400" 
+                        : score >= 60 
+                        ? "text-yellow-600 dark:text-yellow-400"
+                        : "text-red-600 dark:text-red-400";
+                      return (
+                        <div className={`p-4 rounded-lg border text-center ${colorClass}`}>
+                          <div className={`text-2xl font-bold ${textColor}`}>{score}%</div>
+                          <div className="text-xs text-muted-foreground mt-1">Clarity</div>
+                        </div>
+                      );
+                    })()}
+                    {selectedResult.evaluation.depth !== undefined && (() => {
+                      const score = selectedResult.evaluation.depth;
+                      const colorClass = score >= 80 
+                        ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" 
+                        : score >= 60 
+                        ? "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800"
+                        : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800";
+                      const textColor = score >= 80 
+                        ? "text-green-600 dark:text-green-400" 
+                        : score >= 60 
+                        ? "text-yellow-600 dark:text-yellow-400"
+                        : "text-red-600 dark:text-red-400";
+                      return (
+                        <div className={`p-4 rounded-lg border text-center ${colorClass}`}>
+                          <div className={`text-2xl font-bold ${textColor}`}>{score}%</div>
+                          <div className="text-xs text-muted-foreground mt-1">Depth</div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Strengths */}
-                  {selectedResult.evaluation.strengths && selectedResult.evaluation.strengths.length > 0 && (
+                  {selectedResult.evaluation.strengths && (
                     <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
                       <div className="text-xs font-semibold text-green-600 dark:text-green-400 mb-2 uppercase flex items-center gap-1">
                         <CheckCircle2 className="h-3 w-3" />
                         Strengths
                       </div>
-                      <ul className="list-disc list-inside space-y-1">
-                        {selectedResult.evaluation.strengths.map((strength: string, idx: number) => (
-                          <li key={idx} className="text-sm text-foreground">{strength}</li>
-                        ))}
-                      </ul>
+                      {Array.isArray(selectedResult.evaluation.strengths) ? (
+                        <ul className="list-disc list-inside space-y-1">
+                          {selectedResult.evaluation.strengths.map((strength: string, idx: number) => (
+                            <li key={idx} className="text-sm text-foreground">{strength}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-foreground">{selectedResult.evaluation.strengths}</p>
+                      )}
                     </div>
                   )}
 
                   {/* Areas for Improvement */}
-                  {selectedResult.evaluation.improvements && selectedResult.evaluation.improvements.length > 0 && (
+                  {selectedResult.evaluation.improvements && (
                     <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
                       <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-2 uppercase flex items-center gap-1">
                         <AlertCircle className="h-3 w-3" />
                         Areas for Improvement
                       </div>
-                      <ul className="list-disc list-inside space-y-1">
-                        {selectedResult.evaluation.improvements.map((improvement: string, idx: number) => (
-                          <li key={idx} className="text-sm text-foreground">{improvement}</li>
-                        ))}
-                      </ul>
+                      {Array.isArray(selectedResult.evaluation.improvements) ? (
+                        <ul className="list-disc list-inside space-y-1">
+                          {selectedResult.evaluation.improvements.map((improvement: string, idx: number) => (
+                            <li key={idx} className="text-sm text-foreground">{improvement}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-foreground">{selectedResult.evaluation.improvements}</p>
+                      )}
                     </div>
                   )}
                 </div>
