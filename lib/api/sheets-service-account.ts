@@ -74,11 +74,12 @@ export async function appendVivaResultToSheet(result: StudentVivaResult): Promis
     const score = result.evaluation?.score || result.score || "";
     const feedback = result.evaluation?.feedback || result.overallFeedback || "";
     
+    // Column order: A=Date&Time, B=StudentName, C=Email, D=Subject, E=Topics, 
+    //               F=QuestionsAnswered, G=Score, H=OverallFeedback, I=Transcript, J=Recording, K=Evaluation(JSON)
     const row = [
       timestamp,
       result.studentName || "",
       result.studentEmail || "",
-      result.studentPhone || "",
       result.subject || "",
       result.topic || "",
       result.questionsAnswered?.toString() || "",
@@ -86,12 +87,12 @@ export async function appendVivaResultToSheet(result: StudentVivaResult): Promis
       feedback,
       result.transcript || "",
       result.recordingUrl || "",
-      result.vapiCallId || "",
+      result.evaluation ? JSON.stringify(result.evaluation) : "",
     ];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: STUDENT_DATA_SHEET_ID,
-      range: `${VIVA_RESULTS_SHEET}!A:L`,
+      range: `${VIVA_RESULTS_SHEET}!A:K`,
       valueInputOption: "USER_ENTERED",
       insertDataOption: "INSERT_ROWS",
       requestBody: {
@@ -116,10 +117,26 @@ export async function updateVivaResultInSheet(
     
     const updateValues: { range: string; values: string[][] }[] = [];
     
+    // Column order: A=Date&Time, B=StudentName, C=Email, D=Subject, E=Topics, 
+    //               F=QuestionsAnswered, G=Score, H=OverallFeedback, I=Transcript, J=Recording, K=Evaluation(JSON)
+    if (updates.studentEmail) {
+      updateValues.push({
+        range: `${VIVA_RESULTS_SHEET}!C${rowIndex}`,
+        values: [[updates.studentEmail]],
+      });
+    }
+    
+    if (updates.questionsAnswered !== undefined) {
+      updateValues.push({
+        range: `${VIVA_RESULTS_SHEET}!F${rowIndex}`,
+        values: [[updates.questionsAnswered.toString()]],
+      });
+    }
+    
     if (updates.score !== undefined || updates.evaluation?.score !== undefined) {
       const score = updates.evaluation?.score || updates.score;
       updateValues.push({
-        range: `${VIVA_RESULTS_SHEET}!H${rowIndex}`,
+        range: `${VIVA_RESULTS_SHEET}!G${rowIndex}`,
         values: [[score?.toString() || ""]],
       });
     }
@@ -127,8 +144,15 @@ export async function updateVivaResultInSheet(
     if (updates.overallFeedback || updates.evaluation?.feedback) {
       const feedback = updates.evaluation?.feedback || updates.overallFeedback;
       updateValues.push({
-        range: `${VIVA_RESULTS_SHEET}!I${rowIndex}`,
+        range: `${VIVA_RESULTS_SHEET}!H${rowIndex}`,
         values: [[feedback || ""]],
+      });
+    }
+    
+    if (updates.evaluation) {
+      updateValues.push({
+        range: `${VIVA_RESULTS_SHEET}!K${rowIndex}`,
+        values: [[JSON.stringify(updates.evaluation)]],
       });
     }
 

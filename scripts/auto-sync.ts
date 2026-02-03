@@ -115,11 +115,12 @@ async function appendToGoogleSheet(data: any): Promise<boolean> {
     oauth2Client.setCredentials({ access_token: accessToken });
     const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
 
+    // Column order: A=Date&Time, B=StudentName, C=Email, D=Subject, E=Topics, 
+    //               F=QuestionsAnswered, G=Score, H=OverallFeedback, I=Transcript, J=Recording, K=Evaluation(JSON)
     const values = [[
       data.timestamp.toISOString(),
       data.studentName,
-      data.studentEmail,
-      '', // studentPhone (not available from VAPI)
+      data.studentEmail || '',
       data.subject,
       data.topics,
       data.questionsAnswered.toString(),
@@ -127,12 +128,12 @@ async function appendToGoogleSheet(data: any): Promise<boolean> {
       data.overallFeedback || '',
       data.transcript || '',
       data.recordingUrl || '',
-      data.vapiCallId
+      data.evaluation ? JSON.stringify(data.evaluation) : ''
     ]];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: STUDENT_DATA_SHEET_ID,
-      range: "'Viva Results'!A:L",
+      range: "'Viva Results'!A:K",
       valueInputOption: 'RAW',
       requestBody: { values }
     });
@@ -145,11 +146,14 @@ async function appendToGoogleSheet(data: any): Promise<boolean> {
 }
 
 // Update specific cells in Google Sheets (for syncing evaluations back)
+// Column order: A=Date&Time, B=StudentName, C=Email, D=Subject, E=Topics, 
+//               F=QuestionsAnswered, G=Score, H=OverallFeedback, I=Transcript, J=Recording, K=Evaluation(JSON)
 async function updateGoogleSheetRow(rowIndex: number, updates: {
   score?: number;
   questionsAnswered?: number;
   overallFeedback?: string;
   studentEmail?: string;
+  evaluation?: any;
 }): Promise<boolean> {
   try {
     const accessToken = await getGoogleSheetsAccessToken();
@@ -161,18 +165,21 @@ async function updateGoogleSheetRow(rowIndex: number, updates: {
 
     const updateData: { range: string; values: string[][] }[] = [];
     
-    // Column C = email (index 2), G = questionsAnswered (index 6), H = score (index 7), I = overallFeedback (index 8)
+    // C=Email, F=QuestionsAnswered, G=Score, H=OverallFeedback, K=Evaluation
     if (updates.studentEmail) {
       updateData.push({ range: `'Viva Results'!C${rowIndex}`, values: [[updates.studentEmail]] });
     }
     if (updates.questionsAnswered !== undefined) {
-      updateData.push({ range: `'Viva Results'!G${rowIndex}`, values: [[updates.questionsAnswered.toString()]] });
+      updateData.push({ range: `'Viva Results'!F${rowIndex}`, values: [[updates.questionsAnswered.toString()]] });
     }
     if (updates.score !== undefined) {
-      updateData.push({ range: `'Viva Results'!H${rowIndex}`, values: [[updates.score.toString()]] });
+      updateData.push({ range: `'Viva Results'!G${rowIndex}`, values: [[updates.score.toString()]] });
     }
     if (updates.overallFeedback) {
-      updateData.push({ range: `'Viva Results'!I${rowIndex}`, values: [[updates.overallFeedback]] });
+      updateData.push({ range: `'Viva Results'!H${rowIndex}`, values: [[updates.overallFeedback]] });
+    }
+    if (updates.evaluation) {
+      updateData.push({ range: `'Viva Results'!K${rowIndex}`, values: [[JSON.stringify(updates.evaluation)]] });
     }
 
     if (updateData.length > 0) {
@@ -223,21 +230,21 @@ async function fetchSheetsEvaluations(): Promise<SheetEvaluation[]> {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: STUDENT_DATA_SHEET_ID,
-      range: "'Viva Results'!A2:L",
+      range: "'Viva Results'!A2:K",
     });
 
     const rows = response.data.values || [];
-    // Column order: A=timestamp, B=name, C=email, D=phone, E=subject, F=topics, 
-    //               G=questionsAnswered, H=score, I=overallFeedback, J=transcript, K=recording, L=vapiCallId
+    // Column order: A=Date&Time, B=StudentName, C=Email, D=Subject, E=Topics, 
+    //               F=QuestionsAnswered, G=Score, H=OverallFeedback, I=Transcript, J=Recording, K=Evaluation(JSON)
     sheetsEvaluationCache = rows.map((row, index) => ({
       timestamp: row[0] || '',
       studentName: row[1] || '',
       studentEmail: row[2] || '',
-      subject: row[4] || '',          // Column E (index 4)
-      questionsAnswered: parseInt(row[6]) || 0,  // Column G (index 6)
-      score: parseInt(row[7]) || 0,   // Column H (index 7)
-      overallFeedback: row[8] || '',  // Column I (index 8)
-      evaluation: null,
+      subject: row[3] || '',          // Column D (index 3)
+      questionsAnswered: parseInt(row[5]) || 0,  // Column F (index 5)
+      score: parseInt(row[6]) || 0,   // Column G (index 6)
+      overallFeedback: row[7] || '',  // Column H (index 7)
+      evaluation: row[10] ? tryParseJSON(row[10]) : null,  // Column K (index 10)
       rowIndex: index + 2  // Row number in sheet (1-indexed, +1 for header)
     })).filter(r => r.studentName && r.studentName.toLowerCase() !== 'unknown student');
 
@@ -246,6 +253,14 @@ async function fetchSheetsEvaluations(): Promise<SheetEvaluation[]> {
   } catch (error: any) {
     console.log(`  Sheets fetch error: ${error.message}`);
     return [];
+  }
+}
+
+function tryParseJSON(str: string): any {
+  try {
+    return JSON.parse(str);
+  } catch {
+    return null;
   }
 }
 
