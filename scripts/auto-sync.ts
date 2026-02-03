@@ -199,6 +199,74 @@ async function updateGoogleSheetRow(rowIndex: number, updates: {
   }
 }
 
+// Find existing row in sheets by student name and timestamp, or add a new row
+async function findOrAddSheetRow(studentName: string, timestamp: string, subject: string): Promise<number> {
+  try {
+    const accessToken = await getGoogleSheetsAccessToken();
+    if (!accessToken) return 0;
+
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+
+    // First try to find existing row
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
+      range: "'Viva Results'!A:K"
+    });
+
+    const rows = response.data.values || [];
+    
+    // Search for matching row (skip header)
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const rowName = (row[1] || '').toLowerCase();
+      const rowTimestamp = row[0] || '';
+      
+      // Match by name and close timestamp (within same minute)
+      if (rowName === studentName.toLowerCase()) {
+        const rowDate = new Date(rowTimestamp).getTime();
+        const targetDate = new Date(timestamp).getTime();
+        const timeDiff = Math.abs(rowDate - targetDate);
+        
+        // If within 5 minutes, consider it the same record
+        if (timeDiff < 5 * 60 * 1000) {
+          return i + 1; // Sheet rows are 1-indexed
+        }
+      }
+    }
+
+    // If no match found, add a new row
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
+      range: "'Viva Results'!A:K",
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: {
+        values: [[
+          timestamp,
+          studentName,
+          '', // email
+          subject,
+          '', // topics
+          '', // questionsAnswered
+          '', // score
+          '', // overallFeedback
+          '', // transcript
+          '', // recording
+          ''  // evaluation
+        ]]
+      }
+    });
+
+    // Return the new row index
+    return rows.length + 1;
+  } catch (error: any) {
+    console.log(`  Error finding/adding sheet row: ${error.message}`);
+    return 0;
+  }
+}
+
 // Fetch evaluation data from Google Sheets
 interface SheetEvaluation {
   studentName: string;
@@ -587,11 +655,27 @@ async function updateMissingEvaluations() {
             const updated = await updateGoogleSheetRow(sheetMatch.rowIndex, {
               score: aiEval.score,
               questionsAnswered: aiEval.questionsAnswered,
-              overallFeedback: aiEval.overallFeedback
+              overallFeedback: aiEval.overallFeedback,
+              evaluation: aiEval.evaluation
             });
             if (updated) {
               sheetsSynced++;
               console.log(`    [Sheets] Synced evaluation to row ${sheetMatch.rowIndex}`);
+            }
+          } else {
+            // No sheet match - try to find by name and timestamp, or add new row
+            const rowIndex = await findOrAddSheetRow(row.student_name, row.timestamp, row.subject);
+            if (rowIndex > 0) {
+              const updated = await updateGoogleSheetRow(rowIndex, {
+                score: aiEval.score,
+                questionsAnswered: aiEval.questionsAnswered,
+                overallFeedback: aiEval.overallFeedback,
+                evaluation: aiEval.evaluation
+              });
+              if (updated) {
+                sheetsSynced++;
+                console.log(`    [Sheets] Synced evaluation to row ${rowIndex}`);
+              }
             }
           }
         }
