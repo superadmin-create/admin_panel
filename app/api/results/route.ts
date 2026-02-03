@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
           transcript: r.transcript || '',
           recordingUrl: r.recording_url || '',
           evaluation: r.evaluation,
+          marksBreakdown: (r as any).marks_breakdown || null,
           teacherEmail: (r as any).teacher_email || ''
         }));
 

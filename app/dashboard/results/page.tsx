@@ -703,6 +703,70 @@ export default function ResultsPage() {
                 </div>
               )}
 
+              {/* Marks Breakdown (from AI evaluation) */}
+              {selectedResult.marksBreakdown && selectedResult.marksBreakdown.length > 0 && (
+                <div className="space-y-6 mb-6">
+                  <h4 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-primary" />
+                    Question-by-Question Marks
+                  </h4>
+                  {selectedResult.marksBreakdown.map((item: any) => {
+                    const marksPercentage = (item.marks / item.maxMarks) * 100;
+                    const markColor =
+                      marksPercentage >= 80
+                        ? "text-green-600 dark:text-green-400"
+                        : marksPercentage >= 60
+                        ? "text-yellow-600 dark:text-yellow-400"
+                        : "text-red-600 dark:text-red-400";
+                    const markBg =
+                      marksPercentage >= 80
+                        ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
+                        : marksPercentage >= 60
+                        ? "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800"
+                        : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800";
+
+                    return (
+                      <div
+                        key={item.questionNumber}
+                        className="border rounded-lg p-5 bg-card shadow-sm"
+                      >
+                        <div className="flex items-center justify-between mb-4 pb-3 border-b">
+                          <h5 className="font-semibold text-base">
+                            Question {item.questionNumber}
+                          </h5>
+                          <div className={`px-3 py-1 rounded-md font-bold text-sm border ${markBg} ${markColor}`}>
+                            {item.marks}/{item.maxMarks} marks
+                          </div>
+                        </div>
+
+                        <div className="mb-4">
+                          <div className="text-xs font-semibold text-primary mb-2 uppercase">Question:</div>
+                          <div className="p-3 bg-primary/5 border-l-4 border-primary rounded-md">
+                            <p className="text-sm leading-relaxed">{item.question}</p>
+                          </div>
+                        </div>
+
+                        <div className="mb-4">
+                          <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase">Student's Answer:</div>
+                          <div className="p-3 bg-muted/50 border-l-4 border-muted-foreground rounded-md">
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{item.answer || "No answer provided"}</p>
+                          </div>
+                        </div>
+
+                        {item.feedback && (
+                          <div>
+                            <div className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-2 uppercase">Feedback:</div>
+                            <div className="p-3 bg-purple-50 dark:bg-purple-950/20 border-l-4 border-purple-500 rounded-md">
+                              <p className="text-sm leading-relaxed">{item.feedback}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* Per-Question Feedback (from VAPI structured data) */}
               {selectedResult.evaluation && selectedResult.evaluation.marks && selectedResult.evaluation.feedback ? (
                 <div className="space-y-6">

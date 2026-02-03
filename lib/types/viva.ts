@@ -13,6 +13,16 @@ export interface VivaResult {
   transcript: string;
   recordingUrl?: string;
   evaluation?: VivaEvaluation; // Per-question evaluation data
+  marksBreakdown?: MarksBreakdownItem[]; // Per-question marks
+}
+
+export interface MarksBreakdownItem {
+  questionNumber: number;
+  question: string;
+  answer: string;
+  marks: number;
+  maxMarks: number;
+  feedback: string;
 }
 
 export interface EvaluationMarks {

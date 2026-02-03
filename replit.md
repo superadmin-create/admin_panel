@@ -83,6 +83,10 @@ Database tables:
   - Returns: `verified: true/false`, student info if found
 
 ## Recent Changes
+- 2026-02-03: Added marks_breakdown column to database and Google Sheets (column L) for per-question marks
+- 2026-02-03: AI evaluation now generates detailed per-question marks with feedback
+- 2026-02-03: Teacher panel results page now shows detailed marks breakdown per question
+- 2026-02-03: Fixed evaluation JSON sync to Google Sheets
 - 2026-02-02: Added Edmingle student verification - students must be registered in Edmingle to access viva
 - 2026-02-02: Integrated student viva flow into admin panel at /student routes (registration, viva, complete)
 - 2026-02-02: Added "Generate Viva Link" feature - teachers can create shareable links for students

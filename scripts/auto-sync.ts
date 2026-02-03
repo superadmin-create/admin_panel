@@ -15,6 +15,7 @@ async function generateAIEvaluation(transcript: string, subject: string, student
   questionsAnswered: number;
   overallFeedback: string;
   evaluation: any;
+  marksBreakdown: any;
 } | null> {
   if (!transcript || transcript.length < 50) {
     return null;
@@ -35,6 +36,8 @@ Evaluate based on:
 3. Ability to answer follow-up questions
 4. Overall understanding of the topic
 
+IMPORTANT: Extract each question asked and the student's answer, then assign marks to each.
+
 Respond in JSON format only:
 {
   "score": <number 0-100>,
@@ -46,7 +49,17 @@ Respond in JSON format only:
     "depth": <score 0-100>,
     "strengths": ["<strength1>", "<strength2>"],
     "improvements": ["<area1>", "<area2>"]
-  }
+  },
+  "marksBreakdown": [
+    {
+      "questionNumber": 1,
+      "question": "<the question asked>",
+      "answer": "<student's answer summary>",
+      "marks": <marks out of 10>,
+      "maxMarks": 10,
+      "feedback": "<brief feedback on this answer>"
+    }
+  ]
 }`
         },
         {
@@ -55,7 +68,7 @@ Respond in JSON format only:
         }
       ],
       response_format: { type: 'json_object' },
-      max_tokens: 500
+      max_tokens: 1500
     });
     
     const content = response.choices[0]?.message?.content;
@@ -66,7 +79,8 @@ Respond in JSON format only:
       score: Math.min(100, Math.max(0, parseInt(result.score) || 0)),
       questionsAnswered: parseInt(result.questionsAnswered) || 0,
       overallFeedback: result.overallFeedback || '',
-      evaluation: result.evaluation || null
+      evaluation: result.evaluation || null,
+      marksBreakdown: result.marksBreakdown || null
     };
   } catch (error) {
     console.log(`    -> AI evaluation failed for ${studentName}:`, (error as Error).message);
@@ -147,13 +161,14 @@ async function appendToGoogleSheet(data: any): Promise<boolean> {
 
 // Update specific cells in Google Sheets (for syncing evaluations back)
 // Column order: A=Date&Time, B=StudentName, C=Email, D=Subject, E=Topics, 
-//               F=QuestionsAnswered, G=Score, H=OverallFeedback, I=Transcript, J=Recording, K=Evaluation(JSON)
+//               F=QuestionsAnswered, G=Score, H=OverallFeedback, I=Transcript, J=Recording, K=Evaluation(JSON), L=MarksBreakdown(JSON)
 async function updateGoogleSheetRow(rowIndex: number, updates: {
   score?: number;
   questionsAnswered?: number;
   overallFeedback?: string;
   studentEmail?: string;
   evaluation?: any;
+  marksBreakdown?: any;
 }): Promise<boolean> {
   try {
     const accessToken = await getGoogleSheetsAccessToken();
@@ -165,7 +180,7 @@ async function updateGoogleSheetRow(rowIndex: number, updates: {
 
     const updateData: { range: string; values: string[][] }[] = [];
     
-    // C=Email, F=QuestionsAnswered, G=Score, H=OverallFeedback, K=Evaluation
+    // C=Email, F=QuestionsAnswered, G=Score, H=OverallFeedback, K=Evaluation, L=MarksBreakdown
     if (updates.studentEmail) {
       updateData.push({ range: `'Viva Results'!C${rowIndex}`, values: [[updates.studentEmail]] });
     }
@@ -180,6 +195,9 @@ async function updateGoogleSheetRow(rowIndex: number, updates: {
     }
     if (updates.evaluation) {
       updateData.push({ range: `'Viva Results'!K${rowIndex}`, values: [[JSON.stringify(updates.evaluation)]] });
+    }
+    if (updates.marksBreakdown) {
+      updateData.push({ range: `'Viva Results'!L${rowIndex}`, values: [[JSON.stringify(updates.marksBreakdown)]] });
     }
 
     if (updateData.length > 0) {
@@ -239,7 +257,7 @@ async function findOrAddSheetRow(studentName: string, timestamp: string, subject
     // If no match found, add a new row
     await sheets.spreadsheets.values.append({
       spreadsheetId: STUDENT_DATA_SHEET_ID,
-      range: "'Viva Results'!A:K",
+      range: "'Viva Results'!A:L",
       valueInputOption: 'RAW',
       insertDataOption: 'INSERT_ROWS',
       requestBody: {
@@ -254,7 +272,8 @@ async function findOrAddSheetRow(studentName: string, timestamp: string, subject
           '', // overallFeedback
           '', // transcript
           '', // recording
-          ''  // evaluation
+          '', // evaluation
+          ''  // marksBreakdown
         ]]
       }
     });
@@ -637,13 +656,14 @@ async function updateMissingEvaluations() {
         if (aiEval && aiEval.score > 0) {
           await pool.query(
             `UPDATE viva_results SET 
-             score = $1, questions_answered = $2, overall_feedback = $3, evaluation = $4
-             WHERE id = $5`,
+             score = $1, questions_answered = $2, overall_feedback = $3, evaluation = $4, marks_breakdown = $5
+             WHERE id = $6`,
             [
               aiEval.score,
               aiEval.questionsAnswered,
               aiEval.overallFeedback,
               aiEval.evaluation ? JSON.stringify(aiEval.evaluation) : null,
+              aiEval.marksBreakdown ? JSON.stringify(aiEval.marksBreakdown) : null,
               row.id
             ]
           );
@@ -656,7 +676,8 @@ async function updateMissingEvaluations() {
               score: aiEval.score,
               questionsAnswered: aiEval.questionsAnswered,
               overallFeedback: aiEval.overallFeedback,
-              evaluation: aiEval.evaluation
+              evaluation: aiEval.evaluation,
+              marksBreakdown: aiEval.marksBreakdown
             });
             if (updated) {
               sheetsSynced++;
@@ -670,7 +691,8 @@ async function updateMissingEvaluations() {
                 score: aiEval.score,
                 questionsAnswered: aiEval.questionsAnswered,
                 overallFeedback: aiEval.overallFeedback,
-                evaluation: aiEval.evaluation
+                evaluation: aiEval.evaluation,
+                marksBreakdown: aiEval.marksBreakdown
               });
               if (updated) {
                 sheetsSynced++;
