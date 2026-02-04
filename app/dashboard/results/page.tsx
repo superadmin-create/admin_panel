@@ -199,6 +199,64 @@ export default function ResultsPage() {
     return qaPairs;
   };
 
+  // Export results to CSV
+  const handleExportCSV = () => {
+    const dataToExport = filteredResults.length > 0 ? filteredResults : results;
+    
+    if (dataToExport.length === 0) {
+      alert("No results to export");
+      return;
+    }
+
+    const headers = [
+      "Student Name",
+      "Student Email",
+      "Subject",
+      "Topics",
+      "Score (%)",
+      "Questions Answered",
+      "Knowledge",
+      "Clarity",
+      "Depth",
+      "Strengths",
+      "Improvements",
+      "Overall Feedback",
+      "Date & Time",
+      "Recording URL"
+    ];
+
+    const csvRows = dataToExport.map(result => {
+      const evaluation = result.evaluation || {};
+      return [
+        result.studentName,
+        result.studentEmail || "",
+        result.subject,
+        result.topics || "",
+        result.score,
+        result.questionsAnswered,
+        evaluation.knowledge || "",
+        evaluation.clarity || "",
+        evaluation.depth || "",
+        Array.isArray(evaluation.strengths) ? evaluation.strengths.join("; ") : (evaluation.strengths || ""),
+        Array.isArray(evaluation.improvements) ? evaluation.improvements.join("; ") : (evaluation.improvements || ""),
+        (result.overallFeedback || "").replace(/"/g, '""').replace(/\n/g, " "),
+        formatDate(result.timestamp),
+        result.recordingUrl || ""
+      ].map(field => `"${field}"`).join(",");
+    });
+
+    const csvContent = [headers.join(","), ...csvRows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `viva_results_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // Send email with results to student
   const handleSendEmail = async (result: VivaResult) => {
     if (!result.studentEmail) {
@@ -366,9 +424,9 @@ export default function ResultsPage() {
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Refresh
                 </Button>
-                <Button variant="outline" size="sm">
+                <Button onClick={handleExportCSV} variant="outline" size="sm">
                   <Download className="h-4 w-4 mr-2" />
-                  Export
+                  Export CSV
                 </Button>
               </div>
             </div>
