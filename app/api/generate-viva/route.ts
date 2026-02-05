@@ -66,7 +66,8 @@ async function generateVivaQuestions(
 
   const isTopicOnly = !documentText || documentText.trim().length === 0;
 
-  const systemPrompt = `You are an expert teacher and examiner. Your task is to generate thoughtful viva (oral examination) questions.
+  const systemPrompt = isTopicOnly 
+    ? `You are an expert teacher and examiner. Your task is to generate thoughtful viva (oral examination) questions.
 
 You must respond with valid JSON in exactly this format:
 {
@@ -88,7 +89,32 @@ Generate exactly 5 questions with a mix of difficulty levels. Questions should:
 - Be open-ended to encourage discussion
 - Cover different aspects of the subject
 - Be appropriate for oral examination
-- Include practical/real-world applications where relevant`;
+- Include practical/real-world applications where relevant`
+    : `You are an expert teacher and examiner. Your task is to generate viva (oral examination) questions STRICTLY based on the document content provided.
+
+CRITICAL INSTRUCTION: You must ONLY use information from the document provided. Do NOT add any external knowledge, general facts, or information not explicitly present in the document. Every question and expected answer must be directly traceable to specific content in the document.
+
+You must respond with valid JSON in exactly this format:
+{
+  "documentSummary": "A 2-3 sentence summary of the document content provided",
+  "topics": ["topic1", "topic2", "topic3"],
+  "questions": [
+    {
+      "id": 1,
+      "question": "The viva question based on document content",
+      "expectedAnswer": "An expected answer using ONLY information from the document",
+      "difficulty": "easy|medium|hard",
+      "topic": "The specific topic from the document"
+    }
+  ]
+}
+
+Generate exactly 5 questions. Questions MUST:
+- Be answerable ONLY using the document content provided
+- Reference specific concepts, facts, or details from the document
+- Have expected answers that quote or paraphrase the document
+- NOT require any external knowledge beyond the document
+- Cover different sections/topics within the document`;
 
   let userPrompt: string;
 
@@ -106,15 +132,23 @@ Include a mix of:
 - Comparison/contrast questions
 - Real-world scenario questions`;
   } else {
-    // Generate based on document content
+    // Generate based on document content ONLY
     userPrompt = `Subject: ${subject}
 ${topics ? `Focus Topics: ${topics}` : ""}
 Preferred Difficulty: ${difficulty}
 
+IMPORTANT: Generate questions EXCLUSIVELY from the document content provided below. Do NOT use any external knowledge or information not present in this document. All questions and expected answers must be directly derived from and answerable using ONLY the text provided.
+
 Document Content:
 ${documentText!.slice(0, 15000)}
 
-Based on this educational document, generate 5 viva questions that would effectively assess a student's understanding of the material. Include a mix of conceptual, application-based, and analytical questions.`;
+Based ONLY on this document content, generate 5 viva questions that:
+1. Can be answered using ONLY information from the document above
+2. Test the student's understanding of the specific content in this document
+3. Include expected answers that reference specific points from the document
+4. Do NOT require any knowledge beyond what is written in the document
+
+Every question must be directly answerable from the provided text.`;
   }
 
   const response = await openai.chat.completions.create({
