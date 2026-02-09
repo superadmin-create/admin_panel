@@ -57,7 +57,8 @@ async function generateVivaQuestions(
   documentText: string | null,
   subject: string,
   difficulty: string,
-  topics?: string
+  topics?: string,
+  questionCount: number = 5
 ): Promise<GenerateVivaResponse> {
   // Check for OpenAI API key
   if (!process.env.OPENAI_API_KEY) {
@@ -84,7 +85,7 @@ You must respond with valid JSON in exactly this format:
   ]
 }
 
-Generate exactly 5 questions with a mix of difficulty levels. Questions should:
+Generate exactly ${questionCount} questions with a mix of difficulty levels. Questions should:
 - Test understanding, not just memorization
 - Be open-ended to encourage discussion
 - Cover different aspects of the subject
@@ -109,7 +110,7 @@ You must respond with valid JSON in exactly this format:
   ]
 }
 
-Generate exactly 5 questions. Questions MUST:
+Generate exactly ${questionCount} questions. Questions MUST:
 - Be answerable ONLY using the document content provided
 - Reference specific concepts, facts, or details from the document
 - Have expected answers that quote or paraphrase the document
@@ -124,7 +125,7 @@ Generate exactly 5 questions. Questions MUST:
 ${topics ? `Specific Topics to Cover: ${topics}` : ""}
 Preferred Difficulty: ${difficulty}
 
-Generate 5 comprehensive viva questions for the subject "${subject}"${topics ? ` focusing on: ${topics}` : ""}. 
+Generate ${questionCount} comprehensive viva questions for the subject "${subject}"${topics ? ` focusing on: ${topics}` : ""}. 
 Include a mix of:
 - Fundamental concept questions
 - Application-based questions  
@@ -142,7 +143,7 @@ IMPORTANT: Generate questions EXCLUSIVELY from the document content provided bel
 Document Content:
 ${documentText!.slice(0, 15000)}
 
-Based ONLY on this document content, generate 5 viva questions that:
+Based ONLY on this document content, generate ${questionCount} viva questions that:
 1. Can be answered using ONLY information from the document above
 2. Test the student's understanding of the specific content in this document
 3. Include expected answers that reference specific points from the document
@@ -195,6 +196,8 @@ export async function POST(request: NextRequest) {
     const difficulty = (formData.get("difficulty") as string) || "mixed";
     const topics = formData.get("topics") as string | null;
     const topicOnly = formData.get("topicOnly") === "true";
+    const questionCountRaw = formData.get("questionCount") as string | null;
+    const questionCount = Math.min(Math.max(parseInt(questionCountRaw || "5", 10) || 5, 1), 20);
 
     let documentText: string | null = null;
 
@@ -273,7 +276,8 @@ export async function POST(request: NextRequest) {
       documentText,
       subject,
       difficulty,
-      topics || undefined
+      topics || undefined,
+      questionCount
     );
 
     return NextResponse.json(result);

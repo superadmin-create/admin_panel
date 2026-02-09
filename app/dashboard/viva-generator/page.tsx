@@ -86,6 +86,7 @@ export default function VivaGeneratorPage() {
   const [subject, setSubject] = useState("");
   const [topics, setTopics] = useState("");
   const [difficulty, setDifficulty] = useState("mixed");
+  const [questionCount, setQuestionCount] = useState(5);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generatedViva, setGeneratedViva] = useState<GeneratedViva | null>(null);
@@ -268,6 +269,7 @@ export default function VivaGeneratorPage() {
       formData.append("subject", subject || "General");
       formData.append("topics", topics);
       formData.append("difficulty", difficulty);
+      formData.append("questionCount", questionCount.toString());
 
       const response = await fetch("/api/generate-viva", {
         method: "POST",
@@ -849,11 +851,26 @@ export default function VivaGeneratorPage() {
                 <div className="p-3 rounded-lg bg-purple-50 border border-purple-100">
                   <div className="flex items-center gap-2 text-purple-700 mb-1">
                     <Target className="h-4 w-4" />
-                    <span className="text-xs font-semibold">5 Questions</span>
+                    <span className="text-xs font-semibold">Questions</span>
                   </div>
-                  <p className="text-xs text-purple-600">
-                    Varied difficulty & comprehensive
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={questionCount}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        if (!isNaN(val) && val >= 1 && val <= 20) {
+                          setQuestionCount(val);
+                        }
+                      }}
+                      className="h-7 w-14 text-xs text-center px-1 bg-white border-purple-200 text-purple-700 font-semibold"
+                    />
+                    <span className="text-xs text-purple-600">
+                      (1-20)
+                    </span>
+                  </div>
                 </div>
               </div>
             </CardContent>
