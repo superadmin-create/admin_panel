@@ -41,7 +41,6 @@ import {
   Settings2,
   Link,
   ExternalLink,
-  ChevronDown,
   Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -100,11 +99,6 @@ export default function VivaGeneratorPage() {
   
   const [vivaLink, setVivaLink] = useState<string>("");
   const [linkCopied, setLinkCopied] = useState(false);
-
-  const [subjectDropdownOpen, setSubjectDropdownOpen] = useState(false);
-  const [topicDropdownOpen, setTopicDropdownOpen] = useState(false);
-  const subjectDropdownRef = useRef<HTMLDivElement>(null);
-  const topicDropdownRef = useRef<HTMLDivElement>(null);
 
   const [subjectsList, setSubjectsList] = useState<Subject[]>([]);
   const [topicsList, setTopicsList] = useState<Topic[]>([]);
@@ -183,19 +177,6 @@ export default function VivaGeneratorPage() {
       setSelectedTopics([]);
     }
   }, [selectedSubjects, topicsList]);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (subjectDropdownRef.current && !subjectDropdownRef.current.contains(e.target as Node)) {
-        setSubjectDropdownOpen(false);
-      }
-      if (topicDropdownRef.current && !topicDropdownRef.current.contains(e.target as Node)) {
-        setTopicDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const toggleSubject = (name: string) => {
     setSelectedSubjects(prev =>
@@ -454,184 +435,180 @@ export default function VivaGeneratorPage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
+          <CardContent className="space-y-6">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2 text-base">
                   <BookOpen className="h-4 w-4 text-blue-500" />
                   Subjects <span className="text-destructive">*</span>
                 </Label>
-                <div className="relative" ref={subjectDropdownRef}>
+                {selectedSubjects.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => setSubjectDropdownOpen(prev => !prev)}
-                    disabled={isLoadingSubjects}
-                    className={cn(
-                      "flex min-h-[48px] w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
-                      "hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-                      isLoadingSubjects && "opacity-50 cursor-not-allowed"
-                    )}
+                    onClick={() => setSelectedSubjects([])}
+                    className="text-xs text-muted-foreground hover:text-destructive transition-colors"
                   >
-                    <div className="flex flex-wrap gap-1.5 flex-1 mr-2">
-                      {isLoadingSubjects ? (
-                        <span className="flex items-center gap-2 text-muted-foreground">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Loading subjects...
-                        </span>
-                      ) : selectedSubjects.length === 0 ? (
-                        <span className="text-muted-foreground">Select subjects...</span>
-                      ) : (
-                        selectedSubjects.map(s => (
-                          <Badge key={s} variant="secondary" className="flex items-center gap-1 text-xs">
-                            <BookOpen className="h-3 w-3" />
-                            {s}
-                            <X
-                              className="h-3 w-3 cursor-pointer hover:text-destructive"
-                              onClick={(e) => { e.stopPropagation(); toggleSubject(s); }}
-                            />
-                          </Badge>
-                        ))
-                      )}
-                    </div>
-                    <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", subjectDropdownOpen && "rotate-180")} />
+                    Clear all
                   </button>
-                  {subjectDropdownOpen && (
-                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-60 overflow-auto">
-                      {subjectsList.length === 0 ? (
-                        <div className="p-3 text-sm text-muted-foreground text-center">No subjects found</div>
-                      ) : (
-                        subjectsList.map(s => (
-                          <button
-                            key={s.id}
-                            type="button"
-                            className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-accent transition-colors text-left"
-                            onClick={() => toggleSubject(s.name)}
-                          >
-                            <div className={cn(
-                              "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
-                              selectedSubjects.includes(s.name) ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/30"
-                            )}>
-                              {selectedSubjects.includes(s.name) && <Check className="h-3 w-3" />}
-                            </div>
-                            <BookOpen className="h-4 w-4 text-blue-500" />
-                            <span>{s.name}</span>
-                            {s.code && <span className="text-xs text-muted-foreground">({s.code})</span>}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-                {subjectsList.length === 0 && !isLoadingSubjects && (
-                  <p className="text-xs text-muted-foreground">
-                    No subjects found. Add subjects in the Subjects section.
-                  </p>
                 )}
               </div>
+              {isLoadingSubjects ? (
+                <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading subjects...
+                </div>
+              ) : subjectsList.length === 0 ? (
+                <div className="p-4 text-sm text-muted-foreground text-center border rounded-lg bg-muted/30">
+                  No subjects found. Add subjects in the Subjects section.
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  {subjectsList.map(s => {
+                    const isSelected = selectedSubjects.includes(s.name);
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => toggleSubject(s.name)}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm text-left transition-all",
+                          isSelected
+                            ? "bg-blue-50 border-blue-300 text-blue-800 shadow-sm ring-1 ring-blue-200"
+                            : "bg-background border-input hover:bg-accent/50 hover:border-blue-200 text-foreground"
+                        )}
+                      >
+                        <div className={cn(
+                          "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors",
+                          isSelected ? "bg-blue-500 border-blue-500 text-white" : "border-muted-foreground/30"
+                        )}>
+                          {isSelected && <Check className="h-3 w-3" />}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="truncate font-medium">{s.name}</span>
+                          {s.code && <span className="text-[10px] text-muted-foreground truncate">{s.code}</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
+            <div className="border-t pt-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2 text-base">
                   <Tag className="h-4 w-4 text-purple-500" />
                   Topics
+                  {selectedSubjects.length > 0 && filteredTopics.length > 0 && (
+                    <span className="text-xs font-normal text-muted-foreground">
+                      ({filteredTopics.length} available)
+                    </span>
+                  )}
                 </Label>
-                <div className="relative" ref={topicDropdownRef}>
-                  <button
-                    type="button"
-                    onClick={() => { if (selectedSubjects.length > 0 && !isLoadingTopics) setTopicDropdownOpen(prev => !prev); }}
-                    disabled={selectedSubjects.length === 0 || isLoadingTopics}
-                    className={cn(
-                      "flex min-h-[48px] w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
-                      "hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-                      (selectedSubjects.length === 0 || isLoadingTopics) && "opacity-50 cursor-not-allowed"
-                    )}
-                  >
-                    <div className="flex flex-wrap gap-1.5 flex-1 mr-2">
-                      {selectedSubjects.length === 0 ? (
-                        <span className="text-muted-foreground">Select subjects first</span>
-                      ) : isLoadingTopics ? (
-                        <span className="text-muted-foreground">Loading topics...</span>
-                      ) : selectedTopics.length === 0 ? (
-                        <span className="text-muted-foreground">Select topics...</span>
-                      ) : (
-                        selectedTopics.map(t => (
-                          <Badge key={t} variant="outline" className="flex items-center gap-1 text-xs border-purple-200 bg-purple-50 text-purple-700">
-                            <Tag className="h-3 w-3" />
-                            {t}
-                            <X
-                              className="h-3 w-3 cursor-pointer hover:text-destructive"
-                              onClick={(e) => { e.stopPropagation(); toggleTopic(t); }}
-                            />
-                          </Badge>
-                        ))
-                      )}
-                    </div>
-                    <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", topicDropdownOpen && "rotate-180")} />
-                  </button>
-                  {topicDropdownOpen && (
-                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-60 overflow-auto">
-                      {filteredTopics.length === 0 ? (
-                        <div className="p-3 text-sm text-muted-foreground text-center">No topics available</div>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-accent transition-colors text-left border-b"
-                            onClick={selectAllTopics}
-                          >
-                            <div className={cn(
-                              "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
-                              filteredTopics.every(t => selectedTopics.includes(t.name)) ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/30"
-                            )}>
-                              {filteredTopics.every(t => selectedTopics.includes(t.name)) && <Check className="h-3 w-3" />}
-                            </div>
-                            <Tag className="h-4 w-4 text-gray-500" />
-                            <span className="font-medium">Select All</span>
-                          </button>
-                          {filteredTopics.map(topic => (
-                            <button
-                              key={`${topic.subject}-${topic.name}`}
-                              type="button"
-                              className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-accent transition-colors text-left"
-                              onClick={() => toggleTopic(topic.name)}
-                            >
-                              <div className={cn(
-                                "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
-                                selectedTopics.includes(topic.name) ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/30"
-                              )}>
-                                {selectedTopics.includes(topic.name) && <Check className="h-3 w-3" />}
-                              </div>
-                              <Tag className="h-4 w-4 text-purple-500" />
-                              <span>{topic.name}</span>
-                              <span className="text-xs text-muted-foreground ml-auto">{topic.subject}</span>
-                            </button>
-                          ))}
-                        </>
-                      )}
-                    </div>
+                <div className="flex items-center gap-3">
+                  {selectedTopics.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTopics([])}
+                      className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                  {filteredTopics.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={selectAllTopics}
+                      className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+                    >
+                      {filteredTopics.every(t => selectedTopics.includes(t.name)) ? "Deselect all" : "Select all"}
+                    </button>
                   )}
                 </div>
-                {selectedSubjects.length > 0 && filteredTopics.length === 0 && !isLoadingTopics && (
-                  <p className="text-xs text-muted-foreground">
-                    No topics for selected subjects. Add topics in the Topics section.
-                  </p>
-                )}
               </div>
+              {selectedSubjects.length === 0 ? (
+                <div className="p-4 text-sm text-muted-foreground text-center border rounded-lg bg-muted/30">
+                  Select at least one subject to see available topics
+                </div>
+              ) : isLoadingTopics ? (
+                <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading topics...
+                </div>
+              ) : filteredTopics.length === 0 ? (
+                <div className="p-4 text-sm text-muted-foreground text-center border rounded-lg bg-muted/30">
+                  No topics for selected subjects. Add topics in the Topics section.
+                </div>
+              ) : (
+                <div className="max-h-48 overflow-y-auto rounded-lg border bg-background">
+                  {selectedSubjects.map(subj => {
+                    const subjectTopics = filteredTopics.filter(
+                      t => t.subject.toLowerCase() === subj.toLowerCase()
+                    );
+                    if (subjectTopics.length === 0) return null;
+                    return (
+                      <div key={subj}>
+                        {selectedSubjects.length > 1 && (
+                          <div className="px-3 py-1.5 bg-muted/50 border-b text-xs font-semibold text-muted-foreground flex items-center gap-1.5 sticky top-0">
+                            <BookOpen className="h-3 w-3" />
+                            {subj}
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2">
+                          {subjectTopics.map(topic => {
+                            const isSelected = selectedTopics.includes(topic.name);
+                            return (
+                              <button
+                                key={`${topic.subject}-${topic.name}`}
+                                type="button"
+                                onClick={() => toggleTopic(topic.name)}
+                                className={cn(
+                                  "flex items-center gap-2 px-2.5 py-2 rounded-md border text-sm text-left transition-all",
+                                  isSelected
+                                    ? "bg-purple-50 border-purple-300 text-purple-800 shadow-sm ring-1 ring-purple-200"
+                                    : "bg-background border-transparent hover:bg-accent/50 hover:border-purple-200 text-foreground"
+                                )}
+                              >
+                                <div className={cn(
+                                  "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors",
+                                  isSelected ? "bg-purple-500 border-purple-500 text-white" : "border-muted-foreground/30"
+                                )}>
+                                  {isSelected && <Check className="h-3 w-3" />}
+                                </div>
+                                <span className="truncate">{topic.name}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {(selectedSubjects.length > 0 || selectedTopics.length > 0) && (
-              <div className="mt-4 p-3 rounded-lg bg-muted/50 border">
+              <div className="p-3 rounded-lg bg-muted/50 border">
                 <p className="text-sm font-medium mb-2">Selected Configuration:</p>
                 <div className="flex flex-wrap gap-2">
                   {selectedSubjects.map(s => (
                     <Badge key={s} variant="secondary" className="flex items-center gap-1">
                       <BookOpen className="h-3 w-3" />
                       {s}
+                      <X
+                        className="h-3 w-3 ml-0.5 cursor-pointer hover:text-destructive"
+                        onClick={() => toggleSubject(s)}
+                      />
                     </Badge>
                   ))}
                   {selectedTopics.map(t => (
-                    <Badge key={t} variant="outline" className="flex items-center gap-1">
+                    <Badge key={t} variant="outline" className="flex items-center gap-1 border-purple-200 bg-purple-50 text-purple-700">
                       <Tag className="h-3 w-3" />
                       {t}
+                      <X
+                        className="h-3 w-3 ml-0.5 cursor-pointer hover:text-destructive"
+                        onClick={() => toggleTopic(t)}
+                      />
                     </Badge>
                   ))}
                 </div>
