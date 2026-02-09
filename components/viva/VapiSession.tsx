@@ -385,20 +385,20 @@ export const VapiSession = forwardRef<VapiSessionHandle, VapiSessionProps>(
           let firstMessageWithQuestions = "";
           
           if (customQuestions) {
-            // Start directly with the first question - no repeated greeting
             firstMessageWithQuestions = `Hello ${studentNameRef.current || "Student"}. Let's begin with the first question.`;
           } else {
-            // Brief greeting only, then start
             firstMessageWithQuestions = `Hello ${studentNameRef.current || "Student"}. Let's begin.`;
           }
 
-          // Pass questions via variableValues AND in firstMessage as backup
           const variableValues = {
             studentName: studentNameRef.current || "Student",
             studentEmail: studentEmailRef.current || "",
             subject: subjectRef.current || "General",
             topics: topicsValue || "general topics",
-            customQuestions: customQuestions || "Generate 5 relevant questions based on the subject and topics.",
+            customQuestions: customQuestions 
+              ? `IMPORTANT: You MUST use ONLY the following pre-generated questions. Do NOT create your own questions. Ask these exact questions in order and evaluate the student's answers against the expected answers provided.\n\n${customQuestions}`
+              : `No pre-generated questions are available. Generate 5 relevant questions based on the subject "${subjectRef.current || "General"}" and topics "${topicsValue || "general topics"}". Ask questions that test understanding of the material.`,
+            hasGeneratedQuestions: customQuestions ? "true" : "false",
           };
 
           console.log("[VapiSession] Assistant ID:", assistantId);
