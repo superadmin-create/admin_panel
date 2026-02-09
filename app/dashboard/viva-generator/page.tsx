@@ -41,6 +41,8 @@ import {
   Settings2,
   Link,
   ExternalLink,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -83,8 +85,8 @@ type InputMode = "topic" | "file" | "text";
 export default function VivaGeneratorPage() {
   const [file, setFile] = useState<File | null>(null);
   const [textContent, setTextContent] = useState("");
-  const [subject, setSubject] = useState("");
-  const [topics, setTopics] = useState("");
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [difficulty, setDifficulty] = useState("mixed");
   const [questionCount, setQuestionCount] = useState(5);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -99,13 +101,20 @@ export default function VivaGeneratorPage() {
   const [vivaLink, setVivaLink] = useState<string>("");
   const [linkCopied, setLinkCopied] = useState(false);
 
-  // State for subjects and topics from database
+  const [subjectDropdownOpen, setSubjectDropdownOpen] = useState(false);
+  const [topicDropdownOpen, setTopicDropdownOpen] = useState(false);
+  const subjectDropdownRef = useRef<HTMLDivElement>(null);
+  const topicDropdownRef = useRef<HTMLDivElement>(null);
+
   const [subjectsList, setSubjectsList] = useState<Subject[]>([]);
   const [topicsList, setTopicsList] = useState<Topic[]>([]);
   const [filteredTopics, setFilteredTopics] = useState<Topic[]>([]);
-  const [selectedTopic, setSelectedTopic] = useState<string>("");
   const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
   const [isLoadingTopics, setIsLoadingTopics] = useState(true);
+  const [customTopics, setCustomTopics] = useState("");
+
+  const subject = selectedSubjects.join(", ");
+  const topics = [...selectedTopics, ...customTopics.split(",").map(t => t.trim()).filter(Boolean)].join(", ");
 
   const getTeacherEmail = () => {
     if (typeof window !== 'undefined') {
@@ -162,32 +171,53 @@ export default function VivaGeneratorPage() {
     fetchTopics();
   }, []);
 
-  // Filter topics when subject changes
   useEffect(() => {
-    if (subject) {
+    if (selectedSubjects.length > 0) {
       const filtered = topicsList.filter(
-        (t) => t.subject.toLowerCase() === subject.toLowerCase()
+        (t) => selectedSubjects.some(s => s.toLowerCase() === t.subject.toLowerCase())
       );
       setFilteredTopics(filtered);
-      setSelectedTopic(""); // Reset topic when subject changes
-      setTopics(""); // Reset topics input
+      setSelectedTopics(prev => prev.filter(t => filtered.some(ft => ft.name === t)));
     } else {
       setFilteredTopics([]);
-      setSelectedTopic("");
-      setTopics("");
+      setSelectedTopics([]);
     }
-  }, [subject, topicsList]);
+  }, [selectedSubjects, topicsList]);
 
-  // Update topics input when a topic is selected
   useEffect(() => {
-    if (selectedTopic && selectedTopic !== "all") {
-      setTopics(selectedTopic);
-    } else if (selectedTopic === "all") {
-      // Set all topics for this subject
-      const allTopicNames = filteredTopics.map((t) => t.name).join(", ");
-      setTopics(allTopicNames);
+    const handleClickOutside = (e: MouseEvent) => {
+      if (subjectDropdownRef.current && !subjectDropdownRef.current.contains(e.target as Node)) {
+        setSubjectDropdownOpen(false);
+      }
+      if (topicDropdownRef.current && !topicDropdownRef.current.contains(e.target as Node)) {
+        setTopicDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleSubject = (name: string) => {
+    setSelectedSubjects(prev =>
+      prev.includes(name) ? prev.filter(s => s !== name) : [...prev, name]
+    );
+  };
+
+  const toggleTopic = (name: string) => {
+    setSelectedTopics(prev =>
+      prev.includes(name) ? prev.filter(t => t !== name) : [...prev, name]
+    );
+  };
+
+  const selectAllTopics = () => {
+    const allNames = filteredTopics.map(t => t.name);
+    const allSelected = allNames.every(n => selectedTopics.includes(n));
+    if (allSelected) {
+      setSelectedTopics([]);
+    } else {
+      setSelectedTopics(allNames);
     }
-  }, [selectedTopic, filteredTopics]);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -229,7 +259,7 @@ export default function VivaGeneratorPage() {
 
   const canGenerate = () => {
     if (inputMode === "topic") {
-      return subject.trim() || topics.trim();
+      return selectedSubjects.length > 0 || selectedTopics.length > 0;
     }
     if (inputMode === "file") {
       return file !== null;
@@ -343,17 +373,15 @@ export default function VivaGeneratorPage() {
   };
 
   const generateVivaLink = () => {
-    if (!subject) {
-      setError("Please select a subject first");
+    if (selectedSubjects.length === 0) {
+      setError("Please select at least one subject first");
       return;
     }
     
     const params = new URLSearchParams();
-    params.set('subject', subject);
-    if (selectedTopic && selectedTopic !== 'all') {
-      params.set('topic', selectedTopic);
-    } else if (selectedTopic === 'all' && filteredTopics.length > 0) {
-      params.set('topic', filteredTopics.map(t => t.name).join(','));
+    params.set('subject', selectedSubjects.join(','));
+    if (selectedTopics.length > 0) {
+      params.set('topic', selectedTopics.join(','));
     }
     
     const link = `https://fa4efc94-8e50-4690-906b-1db8890f5930-00-1fua1gs9falsj.sisko.replit.dev/?${params.toString()}`;
@@ -428,47 +456,72 @@ export default function VivaGeneratorPage() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-6 md:grid-cols-2">
-              {/* Subject Dropdown */}
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <BookOpen className="h-4 w-4 text-blue-500" />
-                  Subject <span className="text-destructive">*</span>
+                  Subjects <span className="text-destructive">*</span>
                 </Label>
-                <Select
-                  value={subject}
-                  onValueChange={setSubject}
-                  disabled={isLoadingSubjects}
-                >
-                  <SelectTrigger className="h-12">
-                    <SelectValue
-                      placeholder={
-                        isLoadingSubjects ? (
-                          <span className="flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Loading subjects...
-                          </span>
-                        ) : (
-                          "Select a subject"
-                        )
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {subjectsList.map((s) => (
-                      <SelectItem key={s.id} value={s.name}>
-                        <div className="flex items-center gap-2">
-                          <BookOpen className="h-4 w-4 text-blue-500" />
-                          {s.name}
-                          {s.code && (
-                            <span className="text-xs text-muted-foreground">
-                              ({s.code})
-                            </span>
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="relative" ref={subjectDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setSubjectDropdownOpen(prev => !prev)}
+                    disabled={isLoadingSubjects}
+                    className={cn(
+                      "flex min-h-[48px] w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
+                      "hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                      isLoadingSubjects && "opacity-50 cursor-not-allowed"
+                    )}
+                  >
+                    <div className="flex flex-wrap gap-1.5 flex-1 mr-2">
+                      {isLoadingSubjects ? (
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Loading subjects...
+                        </span>
+                      ) : selectedSubjects.length === 0 ? (
+                        <span className="text-muted-foreground">Select subjects...</span>
+                      ) : (
+                        selectedSubjects.map(s => (
+                          <Badge key={s} variant="secondary" className="flex items-center gap-1 text-xs">
+                            <BookOpen className="h-3 w-3" />
+                            {s}
+                            <X
+                              className="h-3 w-3 cursor-pointer hover:text-destructive"
+                              onClick={(e) => { e.stopPropagation(); toggleSubject(s); }}
+                            />
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+                    <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", subjectDropdownOpen && "rotate-180")} />
+                  </button>
+                  {subjectDropdownOpen && (
+                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-60 overflow-auto">
+                      {subjectsList.length === 0 ? (
+                        <div className="p-3 text-sm text-muted-foreground text-center">No subjects found</div>
+                      ) : (
+                        subjectsList.map(s => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-accent transition-colors text-left"
+                            onClick={() => toggleSubject(s.name)}
+                          >
+                            <div className={cn(
+                              "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
+                              selectedSubjects.includes(s.name) ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/30"
+                            )}>
+                              {selectedSubjects.includes(s.name) && <Check className="h-3 w-3" />}
+                            </div>
+                            <BookOpen className="h-4 w-4 text-blue-500" />
+                            <span>{s.name}</span>
+                            {s.code && <span className="text-xs text-muted-foreground">({s.code})</span>}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
                 {subjectsList.length === 0 && !isLoadingSubjects && (
                   <p className="text-xs text-muted-foreground">
                     No subjects found. Add subjects in the Subjects section.
@@ -476,70 +529,111 @@ export default function VivaGeneratorPage() {
                 )}
               </div>
 
-              {/* Topic Dropdown */}
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Tag className="h-4 w-4 text-purple-500" />
-                  Topic
+                  Topics
                 </Label>
-                <Select
-                  value={selectedTopic}
-                  onValueChange={setSelectedTopic}
-                  disabled={!subject || isLoadingTopics}
-                >
-                  <SelectTrigger className="h-12">
-                    <SelectValue
-                      placeholder={
-                        !subject
-                          ? "Select a subject first"
-                          : isLoadingTopics
-                          ? "Loading topics..."
-                          : filteredTopics.length === 0
-                          ? "No topics available"
-                          : "Select a topic"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">
-                      <div className="flex items-center gap-2">
-                        <Tag className="h-4 w-4 text-gray-500" />
-                        All Topics
-                      </div>
-                    </SelectItem>
-                    {filteredTopics.map((topic) => (
-                      <SelectItem key={`${topic.subject}-${topic.name}`} value={topic.name}>
-                        <div className="flex items-center gap-2">
-                          <Tag className="h-4 w-4 text-purple-500" />
-                          {topic.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {subject && filteredTopics.length === 0 && !isLoadingTopics && (
+                <div className="relative" ref={topicDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => { if (selectedSubjects.length > 0 && !isLoadingTopics) setTopicDropdownOpen(prev => !prev); }}
+                    disabled={selectedSubjects.length === 0 || isLoadingTopics}
+                    className={cn(
+                      "flex min-h-[48px] w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
+                      "hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                      (selectedSubjects.length === 0 || isLoadingTopics) && "opacity-50 cursor-not-allowed"
+                    )}
+                  >
+                    <div className="flex flex-wrap gap-1.5 flex-1 mr-2">
+                      {selectedSubjects.length === 0 ? (
+                        <span className="text-muted-foreground">Select subjects first</span>
+                      ) : isLoadingTopics ? (
+                        <span className="text-muted-foreground">Loading topics...</span>
+                      ) : selectedTopics.length === 0 ? (
+                        <span className="text-muted-foreground">Select topics...</span>
+                      ) : (
+                        selectedTopics.map(t => (
+                          <Badge key={t} variant="outline" className="flex items-center gap-1 text-xs border-purple-200 bg-purple-50 text-purple-700">
+                            <Tag className="h-3 w-3" />
+                            {t}
+                            <X
+                              className="h-3 w-3 cursor-pointer hover:text-destructive"
+                              onClick={(e) => { e.stopPropagation(); toggleTopic(t); }}
+                            />
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+                    <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", topicDropdownOpen && "rotate-180")} />
+                  </button>
+                  {topicDropdownOpen && (
+                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-60 overflow-auto">
+                      {filteredTopics.length === 0 ? (
+                        <div className="p-3 text-sm text-muted-foreground text-center">No topics available</div>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-accent transition-colors text-left border-b"
+                            onClick={selectAllTopics}
+                          >
+                            <div className={cn(
+                              "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
+                              filteredTopics.every(t => selectedTopics.includes(t.name)) ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/30"
+                            )}>
+                              {filteredTopics.every(t => selectedTopics.includes(t.name)) && <Check className="h-3 w-3" />}
+                            </div>
+                            <Tag className="h-4 w-4 text-gray-500" />
+                            <span className="font-medium">Select All</span>
+                          </button>
+                          {filteredTopics.map(topic => (
+                            <button
+                              key={`${topic.subject}-${topic.name}`}
+                              type="button"
+                              className="flex items-center gap-2 w-full px-3 py-2.5 text-sm hover:bg-accent transition-colors text-left"
+                              onClick={() => toggleTopic(topic.name)}
+                            >
+                              <div className={cn(
+                                "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
+                                selectedTopics.includes(topic.name) ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/30"
+                              )}>
+                                {selectedTopics.includes(topic.name) && <Check className="h-3 w-3" />}
+                              </div>
+                              <Tag className="h-4 w-4 text-purple-500" />
+                              <span>{topic.name}</span>
+                              <span className="text-xs text-muted-foreground ml-auto">{topic.subject}</span>
+                            </button>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {selectedSubjects.length > 0 && filteredTopics.length === 0 && !isLoadingTopics && (
                   <p className="text-xs text-muted-foreground">
-                    No topics for this subject. Add topics in the Topics section.
+                    No topics for selected subjects. Add topics in the Topics section.
                   </p>
                 )}
               </div>
             </div>
 
-            {/* Selected Configuration Display */}
-            {subject && (
+            {(selectedSubjects.length > 0 || selectedTopics.length > 0) && (
               <div className="mt-4 p-3 rounded-lg bg-muted/50 border">
                 <p className="text-sm font-medium mb-2">Selected Configuration:</p>
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary" className="flex items-center gap-1">
-                    <BookOpen className="h-3 w-3" />
-                    {subject}
-                  </Badge>
-                  {selectedTopic && (
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      <Tag className="h-3 w-3" />
-                      {selectedTopic === "all" ? "All Topics" : selectedTopic}
+                  {selectedSubjects.map(s => (
+                    <Badge key={s} variant="secondary" className="flex items-center gap-1">
+                      <BookOpen className="h-3 w-3" />
+                      {s}
                     </Badge>
-                  )}
+                  ))}
+                  {selectedTopics.map(t => (
+                    <Badge key={t} variant="outline" className="flex items-center gap-1">
+                      <Tag className="h-3 w-3" />
+                      {t}
+                    </Badge>
+                  ))}
                 </div>
               </div>
             )}
@@ -565,13 +659,13 @@ export default function VivaGeneratorPage() {
             <div className="flex gap-3">
               <Button 
                 onClick={generateVivaLink}
-                disabled={!subject}
+                disabled={selectedSubjects.length === 0}
                 className="bg-green-600 hover:bg-green-700"
               >
                 <Link className="h-4 w-4 mr-2" />
                 Generate Viva Link
               </Button>
-              {!subject && (
+              {selectedSubjects.length === 0 && (
                 <p className="text-sm text-muted-foreground flex items-center">
                   Select a subject above to generate a link
                 </p>
@@ -617,8 +711,7 @@ export default function VivaGeneratorPage() {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Share this link with students. They will enter their name and email, then start the viva for <strong>{subject}</strong>
-                  {selectedTopic && selectedTopic !== 'all' && <> - <strong>{selectedTopic}</strong></>}
-                  {selectedTopic === 'all' && <> (All Topics)</>}
+                  {selectedTopics.length > 0 && <> - <strong>{selectedTopics.join(", ")}</strong></>}
                 </p>
               </div>
             )}
@@ -793,11 +886,11 @@ export default function VivaGeneratorPage() {
                 <Input
                   id="custom-topics"
                   placeholder="e.g., Binary Trees, Sorting Algorithms"
-                  value={topics}
-                  onChange={(e) => setTopics(e.target.value)}
+                  value={customTopics}
+                  onChange={(e) => setCustomTopics(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Add custom topics or the selected topic will be used
+                  Add extra topics beyond the ones selected above
                 </p>
               </div>
 
