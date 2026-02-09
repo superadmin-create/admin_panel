@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/layout/Header";
 import {
   Card,
@@ -29,16 +29,117 @@ import {
   Save,
   Key,
   Mail,
+  Phone,
+  CheckCircle2,
+  Loader2,
 } from "lucide-react";
+
+interface TeacherProfile {
+  username: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  department: string;
+}
 
 export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleSave = async () => {
+  const [profile, setProfile] = useState<TeacherProfile>({
+    username: "",
+    firstName: "",
+    lastName: "",
+    phone: "",
+    department: "",
+  });
+
+  useEffect(() => {
+    const stored = localStorage.getItem("teacherInfo");
+    if (stored) {
+      try {
+        const info = JSON.parse(stored);
+        setProfile({
+          username: info.username || "",
+          firstName: info.firstName || "",
+          lastName: info.lastName || "",
+          phone: info.phone || "",
+          department: info.department || "",
+        });
+      } catch {
+        /* ignore parse errors */
+      }
+    }
+    setIsLoading(false);
+  }, []);
+
+  const getInitials = () => {
+    const first = profile.firstName?.[0] || "";
+    const last = profile.lastName?.[0] || "";
+    return (first + last).toUpperCase() || "?";
+  };
+
+  const handleProfileSave = async () => {
+    setIsSaving(true);
+    setSaveSuccess(false);
+    setSaveError(null);
+
+    try {
+      const response = await fetch("/api/auth/update-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentEmail: profile.username,
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          phone: profile.phone,
+          department: profile.department,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to update profile");
+      }
+
+      const updatedInfo = {
+        username: profile.username,
+        firstName: data.teacher.firstName || profile.firstName,
+        lastName: data.teacher.lastName || profile.lastName,
+        phone: data.teacher.phone || profile.phone,
+        department: data.teacher.department || profile.department,
+      };
+      localStorage.setItem("teacherInfo", JSON.stringify(updatedInfo));
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save");
+      setTimeout(() => setSaveError(null), 5000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePasswordSave = async () => {
     setIsSaving(true);
     await new Promise((resolve) => setTimeout(resolve, 1000));
     setIsSaving(false);
   };
+
+  if (isLoading) {
+    return (
+      <>
+        <Header title="Settings" description="Manage your account and application preferences" />
+        <div className="p-6 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -73,20 +174,20 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle>Profile Information</CardTitle>
                 <CardDescription>
-                  Update your personal information and email settings
+                  Update your personal information
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center gap-6">
                   <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
-                    JD
+                    {getInitials()}
                   </div>
                   <div>
-                    <Button variant="outline" size="sm">
-                      Change Avatar
-                    </Button>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      JPG, PNG or GIF. Max 2MB.
+                    <p className="font-medium text-lg">
+                      {profile.firstName} {profile.lastName}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {profile.username}
                     </p>
                   </div>
                 </div>
@@ -94,11 +195,25 @@ export default function SettingsPage() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="firstName">First Name</Label>
-                    <Input id="firstName" defaultValue="John" />
+                    <Input
+                      id="firstName"
+                      value={profile.firstName}
+                      onChange={(e) =>
+                        setProfile((prev) => ({ ...prev, firstName: e.target.value }))
+                      }
+                      placeholder="Enter first name"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="lastName">Last Name</Label>
-                    <Input id="lastName" defaultValue="Doe" />
+                    <Input
+                      id="lastName"
+                      value={profile.lastName}
+                      onChange={(e) =>
+                        setProfile((prev) => ({ ...prev, lastName: e.target.value }))
+                      }
+                      placeholder="Enter last name"
+                    />
                   </div>
                 </div>
 
@@ -109,37 +224,63 @@ export default function SettingsPage() {
                     <Input
                       id="email"
                       type="email"
+                      className="pl-9 bg-muted/50"
+                      value={profile.username}
+                      disabled
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Email cannot be changed as it is used for login
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="phone"
+                      type="tel"
                       className="pl-9"
-                      defaultValue="john.doe@school.edu"
+                      value={profile.phone}
+                      onChange={(e) =>
+                        setProfile((prev) => ({ ...prev, phone: e.target.value }))
+                      }
+                      placeholder="Enter phone number"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input id="phone" type="tel" defaultValue="+91 9876543210" />
+                  <Label htmlFor="department">Department</Label>
+                  <Input
+                    id="department"
+                    value={profile.department}
+                    onChange={(e) =>
+                      setProfile((prev) => ({ ...prev, department: e.target.value }))
+                    }
+                    placeholder="Enter department"
+                  />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="department">Department</Label>
-                  <Select defaultValue="cs">
-                    <SelectTrigger id="department">
-                      <SelectValue placeholder="Select department" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cs">Computer Science</SelectItem>
-                      <SelectItem value="it">Information Technology</SelectItem>
-                      <SelectItem value="ec">Electronics</SelectItem>
-                      <SelectItem value="me">Mechanical</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {saveSuccess && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 text-green-700 border border-green-200">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span className="text-sm font-medium">Profile updated successfully!</span>
+                  </div>
+                )}
+
+                {saveError && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 text-red-700 border border-red-200">
+                    <span className="text-sm font-medium">{saveError}</span>
+                  </div>
+                )}
 
                 <div className="flex justify-end">
-                  <Button onClick={handleSave} disabled={isSaving}>
+                  <Button onClick={handleProfileSave} disabled={isSaving}>
                     {isSaving ? (
                       <>
-                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
                         Saving...
                       </>
                     ) : (
@@ -216,7 +357,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex justify-end">
-                  <Button onClick={handleSave} disabled={isSaving}>
+                  <Button disabled={isSaving}>
                     {isSaving ? "Saving..." : "Save Preferences"}
                   </Button>
                 </div>
@@ -277,15 +418,15 @@ export default function SettingsPage() {
                 <div className="p-4 rounded-lg bg-muted/50 space-y-2">
                   <h4 className="font-medium">Password Requirements</h4>
                   <ul className="text-sm text-muted-foreground space-y-1">
-                    <li>• At least 8 characters long</li>
-                    <li>• Contains at least one uppercase letter</li>
-                    <li>• Contains at least one number</li>
-                    <li>• Contains at least one special character</li>
+                    <li>At least 8 characters long</li>
+                    <li>Contains at least one uppercase letter</li>
+                    <li>Contains at least one number</li>
+                    <li>Contains at least one special character</li>
                   </ul>
                 </div>
 
                 <div className="flex justify-end">
-                  <Button onClick={handleSave} disabled={isSaving}>
+                  <Button onClick={handlePasswordSave} disabled={isSaving}>
                     Update Password
                   </Button>
                 </div>
@@ -368,24 +509,8 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="defaultSubject">Default Subject Filter</Label>
-                  <Select defaultValue="all">
-                    <SelectTrigger id="defaultSubject">
-                      <SelectValue placeholder="Select default subject" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Subjects</SelectItem>
-                      <SelectItem value="ds">Data Structures</SelectItem>
-                      <SelectItem value="dbms">DBMS</SelectItem>
-                      <SelectItem value="os">Operating Systems</SelectItem>
-                      <SelectItem value="cn">Computer Networks</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 <div className="flex justify-end">
-                  <Button onClick={handleSave} disabled={isSaving}>
+                  <Button disabled={isSaving}>
                     {isSaving ? "Saving..." : "Save Preferences"}
                   </Button>
                 </div>
@@ -397,5 +522,3 @@ export default function SettingsPage() {
     </>
   );
 }
-
-
