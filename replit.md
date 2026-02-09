@@ -1,0 +1,114 @@
+# AI Viva Admin Panel (Teacher Portal)
+
+## Overview
+The teacher-facing admin panel for AI Viva. This works alongside a separate student-facing app (ai-viva). This is a TypeScript-based web application using:
+- Next.js 14 (App Router)
+- React 18
+- Tailwind CSS
+- Radix UI components
+- React Hook Form with Zod validation
+
+## Project Structure
+```
+/app           - Next.js app router pages and API routes
+  /api         - Backend API endpoints
+  /dashboard   - Dashboard pages
+/components    - Reusable UI components  
+/lib           - Utility functions and shared code
+  /api         - Google Sheets integration
+  db.ts        - PostgreSQL database utilities
+/public        - Static assets
+/scripts       - Build/utility scripts
+```
+
+## Development
+- Run: `npm run dev` (starts on port 5000)
+- Build: `npm run build`
+- Production: `npm run start`
+
+## Configuration
+- Port: 5000 (configured for Replit)
+- Host: 0.0.0.0 (allows external access)
+
+## Data Storage
+The app uses dual storage for data persistence:
+
+### Google Sheets (Primary Read Source)
+- Teacher credentials: Sheet ID `1or1TVnD6Py-gZ1dSP25CJjwufDeQ_Pi-s1tKls3lq_0`
+- Student data (subjects, topics, viva results): Sheet ID `1dPderiJxJl534xNnzHVVqye9VSx3zZY3ZEgO3vjqpFY`
+- Uses Replit's Google Sheets OAuth connector for authentication
+
+### PostgreSQL Database (Secondary Storage)
+All writes are saved to both Google Sheets AND the PostgreSQL database.
+
+Database tables:
+- `teachers` - Teacher login credentials
+- `subjects` - Subject names and codes
+- `topics` - Topics associated with subjects
+- `viva_results` - Student viva examination results
+- `viva_questions` - Generated viva questions
+
+## Environment Variables
+- `DATABASE_URL` - PostgreSQL connection string
+- `OPENAI_API_KEY` - For AI-powered viva question generation
+- `EDMINGLE_API_KEY` - Edmingle API key for student verification
+- `EDMINGLE_ORG_ID` - Edmingle organization ID
+- `EDMINGLE_INSTITUTION_ID` - Edmingle institution ID
+- `NEXT_PUBLIC_VAPI_PUBLIC_KEY` - VAPI public key (client-side)
+- `NEXT_PUBLIC_VAPI_ASSISTANT_ID` - VAPI assistant ID for viva sessions
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL` - Service account for student data writes to Google Sheets
+- `GOOGLE_PRIVATE_KEY` - Service account private key for Google Sheets
+- Google Sheets OAuth handled via Replit connector (for teacher operations)
+
+## API Endpoints
+
+### VAPI Integration (Webhook)
+- `POST /api/webhook/viva-result` - Receive viva results from VAPI (student app)
+  - Saves to both database AND Google Sheets
+  - Required field: `studentName`
+  - Optional: `studentEmail`, `subject`, `topics`, `questionsAnswered`, `score`, `overallFeedback`, `transcript`, `recordingUrl`, `evaluation`
+
+### Sync Endpoints
+- `GET /api/sync-results` - Check sync status (count, last result)
+- `POST /api/sync-results` - Manually trigger sync from Google Sheets to database
+
+### Data Endpoints
+- `GET /api/viva-results` - Fetch viva results (reads from database first, falls back to Sheets)
+- `GET /api/subjects` - List all subjects
+- `GET /api/topics` - List all topics
+
+### Student Verification
+- `POST /api/verify-student` - Verify student against Edmingle before allowing viva access
+  - Required: `email` or `phone`
+  - Returns: `verified: true/false`, student info if found
+
+## Recent Changes
+- 2026-02-03: Added marks_breakdown column to database and Google Sheets (column L) for per-question marks
+- 2026-02-03: AI evaluation now generates detailed per-question marks with feedback
+- 2026-02-03: Teacher panel results page now shows detailed marks breakdown per question
+- 2026-02-03: Fixed evaluation JSON sync to Google Sheets
+- 2026-02-02: Added Edmingle student verification - students must be registered in Edmingle to access viva
+- 2026-02-02: Integrated student viva flow into admin panel at /student routes (registration, viva, complete)
+- 2026-02-02: Added "Generate Viva Link" feature - teachers can create shareable links for students
+- 2026-02-02: Added student viva entry page at /student - students enter name/email, subject/topic are locked
+- 2026-02-02: Dashboard now shows ONLY the logged-in teacher's data (subjects, topics, viva results)
+- 2026-02-02: Auto-sync now merges evaluation data from VAPI (structuredData) OR Google Sheets (fallback)
+- 2026-02-02: Added function to update existing records with missing evaluation scores from Google Sheets
+- 2026-01-27: Added teacher_email filtering - teachers only see their own subjects, topics, and results
+- 2026-01-27: Auto-sync now saves new VAPI results to BOTH database AND Google Sheets
+- 2026-01-27: Fixed VAPI API pagination (cursor-based with createdAtLt)
+- 2026-01-27: Added auto-sync script to fetch calls from VAPI every 5 minutes
+- 2026-01-27: Added webhook endpoint for VAPI to push viva results directly
+- 2026-01-27: Database now primary read source for viva-results endpoint
+- 2026-01-27: Added sync endpoint to manually sync Sheets → Database
+- 2026-01-27: Added PostgreSQL database with dual-save functionality
+- 2026-01-27: Migrated Google Sheets from service account to OAuth2 connector
+- 2026-01-27: Updated all API routes to save data to both Sheets and database
+
+## Teacher Data Isolation
+Each teacher can only see:
+- **Subjects** they created (filtered by `teacher_email`)
+- **Topics** they created (filtered by `teacher_email`)
+- **Viva Results** for their subjects/topics (filtered by `teacher_email`)
+
+The teacher's email (username) is stored in localStorage after login and passed to API requests automatically.
