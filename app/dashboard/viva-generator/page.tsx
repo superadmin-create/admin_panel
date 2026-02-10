@@ -42,6 +42,7 @@ import {
   Link,
   ExternalLink,
   Check,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -79,10 +80,11 @@ const difficultyColors = {
   hard: "bg-rose-100 text-rose-700 border-rose-200",
 };
 
-type InputMode = "topic" | "file" | "text";
+type InputMode = "topic" | "file" | "text" | "qa";
 
 export default function VivaGeneratorPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [qaFile, setQaFile] = useState<File | null>(null);
   const [textContent, setTextContent] = useState("");
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
@@ -96,6 +98,7 @@ export default function VivaGeneratorPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const qaFileInputRef = useRef<HTMLInputElement>(null);
   
   const [vivaLink, setVivaLink] = useState<string>("");
   const [linkCopied, setLinkCopied] = useState(false);
@@ -248,6 +251,9 @@ export default function VivaGeneratorPage() {
     if (inputMode === "text") {
       return textContent.trim().length > 0;
     }
+    if (inputMode === "qa") {
+      return qaFile !== null;
+    }
     return false;
   };
 
@@ -257,6 +263,8 @@ export default function VivaGeneratorPage() {
         setError("Please select a subject or enter specific topics");
       } else if (inputMode === "file") {
         setError("Please upload a document first");
+      } else if (inputMode === "qa") {
+        setError("Please upload a Q&A document first");
       } else {
         setError("Please enter some text content");
       }
@@ -273,6 +281,9 @@ export default function VivaGeneratorPage() {
         formData.append("topicOnly", "true");
       } else if (inputMode === "file" && file) {
         formData.append("document", file);
+      } else if (inputMode === "qa" && qaFile) {
+        formData.append("document", qaFile);
+        formData.append("qaMode", "true");
       } else if (inputMode === "text") {
         formData.append("textContent", textContent);
       }
@@ -344,12 +355,16 @@ export default function VivaGeneratorPage() {
 
   const resetForm = () => {
     setFile(null);
+    setQaFile(null);
     setTextContent("");
     setGeneratedViva(null);
     setError(null);
     setSaveSuccess(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+    if (qaFileInputRef.current) {
+      qaFileInputRef.current.value = "";
     }
   };
 
@@ -709,46 +724,54 @@ export default function VivaGeneratorPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Input Mode Toggle - 3 options */}
-              <div className="flex gap-1 p-1 bg-muted rounded-lg">
+              <div className="grid grid-cols-2 sm:flex gap-1 p-1 bg-muted rounded-lg">
                 <button
                   onClick={() => setInputMode("topic")}
                   className={cn(
-                    "flex-1 py-2 px-2 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-1 sm:gap-1.5",
+                    "py-2 px-2 sm:px-3 sm:flex-1 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-1 sm:gap-1.5",
                     inputMode === "topic"
                       ? "bg-background shadow-sm text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   <Lightbulb className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                  <span className="hidden sm:inline">Topic Only</span>
-                  <span className="sm:hidden">Topic</span>
+                  Topic
                 </button>
                 <button
                   onClick={() => setInputMode("file")}
                   className={cn(
-                    "flex-1 py-2 px-2 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-1 sm:gap-1.5",
+                    "py-2 px-2 sm:px-3 sm:flex-1 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-1 sm:gap-1.5",
                     inputMode === "file"
                       ? "bg-background shadow-sm text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   <Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                  <span className="hidden sm:inline">Upload File</span>
-                  <span className="sm:hidden">Upload</span>
+                  Upload
                 </button>
                 <button
                   onClick={() => setInputMode("text")}
                   className={cn(
-                    "flex-1 py-2 px-2 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-1 sm:gap-1.5",
+                    "py-2 px-2 sm:px-3 sm:flex-1 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-1 sm:gap-1.5",
                     inputMode === "text"
                       ? "bg-background shadow-sm text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                  <span className="hidden sm:inline">Paste Text</span>
-                  <span className="sm:hidden">Text</span>
+                  Text
+                </button>
+                <button
+                  onClick={() => setInputMode("qa")}
+                  className={cn(
+                    "py-2 px-2 sm:px-3 sm:flex-1 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-1 sm:gap-1.5",
+                    inputMode === "qa"
+                      ? "bg-background shadow-sm text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <ClipboardList className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                  Q&A
                 </button>
               </div>
 
@@ -818,13 +841,93 @@ export default function VivaGeneratorPage() {
                     </div>
                   )}
                 </div>
-              ) : (
+              ) : inputMode === "text" ? (
                 <Textarea
                   placeholder="Paste your educational content, notes, or study material here..."
                   className="min-h-[200px]"
                   value={textContent}
                   onChange={(e) => setTextContent(e.target.value)}
                 />
+              ) : (
+                <div
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const droppedFile = e.dataTransfer.files[0];
+                    if (droppedFile) {
+                      const validExtensions = [".pdf", ".txt", ".md", ".doc", ".docx"];
+                      const isValid = validExtensions.some((ext) =>
+                        droppedFile.name.toLowerCase().endsWith(ext)
+                      );
+                      if (isValid) {
+                        setQaFile(droppedFile);
+                        setError(null);
+                      } else {
+                        setError("Please upload a PDF, TXT, MD, DOC, or DOCX file");
+                      }
+                    }
+                  }}
+                  onDragOver={(e) => e.preventDefault()}
+                  className={cn(
+                    "relative border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer hover:border-orange-400/50 hover:bg-orange-50/50",
+                    qaFile ? "border-orange-400 bg-orange-50/50" : "border-border"
+                  )}
+                  onClick={() => qaFileInputRef.current?.click()}
+                >
+                  <input
+                    ref={qaFileInputRef}
+                    type="file"
+                    accept=".pdf,.txt,.md,.doc,.docx"
+                    onChange={(e) => {
+                      const selectedFile = e.target.files?.[0];
+                      if (selectedFile) {
+                        setQaFile(selectedFile);
+                        setError(null);
+                      }
+                    }}
+                    className="hidden"
+                  />
+                  {qaFile ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-center gap-2 text-orange-600">
+                        <CheckCircle2 className="h-8 w-8" />
+                      </div>
+                      <p className="font-medium">{qaFile.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {(qaFile.size / 1024).toFixed(1)} KB
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setQaFile(null);
+                          if (qaFileInputRef.current) {
+                            qaFileInputRef.current.value = "";
+                          }
+                        }}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Remove
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <ClipboardList className="h-10 w-10 mx-auto text-orange-500" />
+                      <p className="font-medium">
+                        Upload your Q&A document
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Upload a document containing questions and answers.
+                        <br />
+                        The viva will use <strong>only</strong> questions from this document.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Supports PDF, TXT, and MD files
+                      </p>
+                    </div>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>

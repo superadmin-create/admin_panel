@@ -58,7 +58,8 @@ async function generateVivaQuestions(
   subject: string,
   difficulty: string,
   topics?: string,
-  questionCount: number = 5
+  questionCount: number = 5,
+  qaMode: boolean = false
 ): Promise<GenerateVivaResponse> {
   // Check for OpenAI API key
   if (!process.env.OPENAI_API_KEY) {
@@ -66,6 +67,67 @@ async function generateVivaQuestions(
   }
 
   const isTopicOnly = !documentText || documentText.trim().length === 0;
+
+  if (qaMode && documentText) {
+    const qaSystemPrompt = `You are an expert teacher and examiner. You are given a document that contains questions and answers (a Q&A document). Your task is to extract and format these questions and answers for a viva (oral examination).
+
+CRITICAL INSTRUCTIONS:
+- You MUST only use questions and answers that are explicitly present in the document
+- Do NOT create new questions or modify existing ones
+- Do NOT add any external knowledge
+- Extract the questions and their corresponding answers exactly as they appear in the document
+- If the document has more questions than requested, select the most important/diverse ones
+- Preserve the original wording of questions and answers as closely as possible
+
+You must respond with valid JSON in exactly this format:
+{
+  "documentSummary": "A 2-3 sentence description of the Q&A document",
+  "topics": ["topic1", "topic2"],
+  "questions": [
+    {
+      "id": 1,
+      "question": "The exact question from the document",
+      "expectedAnswer": "The exact answer from the document",
+      "difficulty": "easy|medium|hard",
+      "topic": "The topic this question belongs to"
+    }
+  ]
+}
+
+Extract up to ${questionCount} questions. Assign difficulty levels based on the complexity of each question.`;
+
+    const qaUserPrompt = `Subject: ${subject}
+${topics ? `Focus Topics: ${topics}` : ""}
+
+Extract questions and answers from this Q&A document. Use ONLY the questions and answers that are explicitly written in the document. Do not create any new questions.
+
+Q&A Document Content:
+${documentText.slice(0, 15000)}
+
+Extract up to ${questionCount} questions with their answers from this document. Every question and answer must come directly from the document text.`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: qaSystemPrompt },
+        { role: "user", content: qaUserPrompt },
+      ],
+      temperature: 0.3,
+      max_tokens: 3000,
+      response_format: { type: "json_object" },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("No response from OpenAI");
+    }
+
+    try {
+      return JSON.parse(content) as GenerateVivaResponse;
+    } catch {
+      throw new Error("Failed to parse AI response");
+    }
+  }
 
   const systemPrompt = isTopicOnly 
     ? `You are an expert teacher and examiner. Your task is to generate thoughtful viva (oral examination) questions.
@@ -196,6 +258,7 @@ export async function POST(request: NextRequest) {
     const difficulty = (formData.get("difficulty") as string) || "mixed";
     const topics = formData.get("topics") as string | null;
     const topicOnly = formData.get("topicOnly") === "true";
+    const qaMode = formData.get("qaMode") === "true";
     const questionCountRaw = formData.get("questionCount") as string | null;
     const questionCount = Math.min(Math.max(parseInt(questionCountRaw || "5", 10) || 5, 1), 20);
 
@@ -277,7 +340,8 @@ export async function POST(request: NextRequest) {
       subject,
       difficulty,
       topics || undefined,
-      questionCount
+      questionCount,
+      qaMode
     );
 
     return NextResponse.json(result);

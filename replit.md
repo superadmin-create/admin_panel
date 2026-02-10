@@ -83,6 +83,9 @@ Database tables:
   - Returns: `verified: true/false`, student info if found
 
 ## Recent Changes
+- 2026-02-10: Made entire webapp mobile-responsive with collapsible sidebar, hamburger menu, responsive grids/tables
+- 2026-02-10: Added Q&A Document upload mode in Viva Generator - extracts questions only from uploaded Q&A documents
+- 2026-02-10: Question source now has 4 modes: Topic, Upload, Text, Q&A
 - 2026-02-03: Added marks_breakdown column to database and Google Sheets (column L) for per-question marks
 - 2026-02-03: AI evaluation now generates detailed per-question marks with feedback
 - 2026-02-03: Teacher panel results page now shows detailed marks breakdown per question
