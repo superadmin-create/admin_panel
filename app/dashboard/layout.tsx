@@ -1,4 +1,7 @@
+"use client";
+
 import { Sidebar } from "@/components/layout/Sidebar";
+import { SidebarProvider } from "@/components/layout/SidebarContext";
 
 export default function DashboardLayout({
   children,
@@ -6,11 +9,11 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-background">
-      <Sidebar />
-      <main className="ml-64">{children}</main>
-    </div>
+    <SidebarProvider>
+      <div className="min-h-screen bg-background">
+        <Sidebar />
+        <main className="md:ml-64">{children}</main>
+      </div>
+    </SidebarProvider>
   );
 }
-
-

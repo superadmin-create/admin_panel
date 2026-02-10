@@ -148,7 +148,7 @@ export default function SettingsPage() {
         description="Manage your account and application preferences"
       />
 
-      <div className="p-6">
+      <div className="p-3 sm:p-6">
         <Tabs defaultValue="profile" className="space-y-6">
           <TabsList className="grid w-full max-w-md grid-cols-4">
             <TabsTrigger value="profile" className="gap-2">

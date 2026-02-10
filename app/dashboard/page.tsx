@@ -135,7 +135,7 @@ export default function DashboardPage() {
     <>
       <Header title="Dashboard" description="Welcome back! Here's an overview of your viva examinations." />
 
-      <div className="p-6 space-y-6">
+      <div className="p-3 sm:p-6 space-y-6">
         {loading ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground">Loading dashboard data...</p>
@@ -143,7 +143,7 @@ export default function DashboardPage() {
         ) : (
           <>
             {/* Stats Grid */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
               {statsDisplay.map((stat, index) => (
             <Card
               key={stat.title}

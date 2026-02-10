@@ -356,9 +356,9 @@ export default function ResultsPage() {
         description="View and analyze all viva examination results"
       />
 
-      <div className="p-6 space-y-6">
+      <div className="p-3 sm:p-6 space-y-6">
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
           <Card className="animate-fade-in-up">
             <CardContent className="p-4 flex items-center gap-4">
               <div className="p-3 rounded-xl bg-blue-100">
@@ -479,7 +479,7 @@ export default function ResultsPage() {
                     </p>
                   </div>
                 ) : (
-                  <div className="rounded-lg border">
+                  <div className="rounded-lg border overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -539,7 +539,7 @@ export default function ResultsPage() {
                               </p>
                             </TableCell>
                             <TableCell className="text-right">
-                              <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="flex justify-end gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                 <Button
                                   variant="ghost"
                                   size="icon"
