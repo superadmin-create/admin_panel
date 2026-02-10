@@ -1,0 +1,55 @@
+SAMPLE Q&A DOCUMENT FORMAT
+==========================
+
+Below are examples of how to format your questions and answers.
+The system accepts any of these formats. You can mix formats in the same document.
+
+------------------------------------------------------------------------
+FORMAT 1: Numbered Q&A pairs
+------------------------------------------------------------------------
+
+Q1. What is the difference between a stack and a queue?
+A1. A stack follows Last-In-First-Out (LIFO) principle where the last element added is the first one removed. A queue follows First-In-First-Out (FIFO) principle where the first element added is the first one removed.
+
+Q2. Explain the concept of polymorphism in object-oriented programming.
+A2. Polymorphism allows objects of different classes to be treated as objects of a common parent class. It enables a single interface to represent different underlying data types. There are two types: compile-time (method overloading) and runtime (method overriding).
+
+Q3. What is a binary search tree?
+A3. A binary search tree is a data structure where each node has at most two children. The left child contains values less than the parent node, and the right child contains values greater than the parent node. This property makes searching efficient with O(log n) average time complexity.
+
+------------------------------------------------------------------------
+FORMAT 2: Question/Answer labels
+------------------------------------------------------------------------
+
+Question: What is the time complexity of quicksort in the average case?
+Answer: The average-case time complexity of quicksort is O(n log n). It works by selecting a pivot element, partitioning the array around the pivot, and recursively sorting the sub-arrays.
+
+Question: Define encapsulation and explain its benefits.
+Answer: Encapsulation is the bundling of data and methods that operate on that data within a single unit (class), restricting direct access to some components. Benefits include data hiding, modularity, easier maintenance, and reduced complexity.
+
+------------------------------------------------------------------------
+FORMAT 3: Simple numbered list
+------------------------------------------------------------------------
+
+1. What is recursion?
+Answer: Recursion is a technique where a function calls itself to solve smaller instances of the same problem. Every recursive function must have a base case to prevent infinite recursion and a recursive case that breaks the problem down.
+
+2. What are the four pillars of OOP?
+Answer: The four pillars of Object-Oriented Programming are:
+- Encapsulation: Bundling data and methods together
+- Abstraction: Hiding complex implementation details
+- Inheritance: Creating new classes from existing ones
+- Polymorphism: Using a single interface for different data types
+
+3. Explain the difference between TCP and UDP.
+Answer: TCP (Transmission Control Protocol) is connection-oriented, reliable, and ensures ordered delivery of data. UDP (User Datagram Protocol) is connectionless, faster but unreliable, and does not guarantee delivery order. TCP is used for web browsing and email, while UDP is used for streaming and gaming.
+
+------------------------------------------------------------------------
+TIPS FOR BEST RESULTS
+------------------------------------------------------------------------
+- Each question should be clearly separated from its answer
+- Use "Q:", "Question:", or numbered format (Q1, Q2, etc.)
+- Use "A:", "Answer:", or corresponding numbered answers (A1, A2, etc.)
+- Leave a blank line between Q&A pairs for clarity
+- You can include multi-line answers
+- The system will extract and use ONLY the questions from your document

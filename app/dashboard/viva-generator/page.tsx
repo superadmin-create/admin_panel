@@ -925,6 +925,15 @@ export default function VivaGeneratorPage() {
                       <p className="text-xs text-muted-foreground">
                         Supports PDF, TXT, and MD files
                       </p>
+                      <a
+                        href="/sample-qa-document.txt"
+                        download="sample-qa-document.txt"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 text-xs text-orange-600 hover:text-orange-700 underline underline-offset-2 mt-1"
+                      >
+                        <Download className="h-3 w-3" />
+                        Download sample format
+                      </a>
                     </div>
                   )}
                 </div>
