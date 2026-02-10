@@ -419,7 +419,7 @@ export default function VivaGeneratorPage() {
         description="Generate intelligent viva questions using AI - from topics, documents, or text"
       />
 
-      <div className="p-6 space-y-6">
+      <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
         {/* Configuration Section */}
         <Card className="animate-fade-in-up border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
           <CardHeader>
@@ -462,7 +462,7 @@ export default function VivaGeneratorPage() {
                   No subjects found. Add subjects in the Subjects section.
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                   {subjectsList.map(s => {
                     const isSelected = selectedSubjects.includes(s.name);
                     return (
@@ -483,8 +483,8 @@ export default function VivaGeneratorPage() {
                         )}>
                           {isSelected && <Check className="h-3 w-3" />}
                         </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="truncate font-medium">{s.name}</span>
+                        <div className="flex flex-col min-w-0 overflow-hidden">
+                          <span className="truncate font-medium text-xs sm:text-sm">{s.name}</span>
                           {s.code && <span className="text-[10px] text-muted-foreground truncate">{s.code}</span>}
                         </div>
                       </button>
@@ -495,7 +495,7 @@ export default function VivaGeneratorPage() {
             </div>
 
             <div className="border-t pt-5 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <Label className="flex items-center gap-2 text-base">
                   <Tag className="h-4 w-4 text-purple-500" />
                   Topics
@@ -554,7 +554,7 @@ export default function VivaGeneratorPage() {
                             {subj}
                           </div>
                         )}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5 p-2">
                           {subjectTopics.map(topic => {
                             const isSelected = selectedTopics.includes(topic.name);
                             return (
@@ -633,11 +633,11 @@ export default function VivaGeneratorPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               <Button 
                 onClick={generateVivaLink}
                 disabled={selectedSubjects.length === 0}
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-green-600 hover:bg-green-700 w-full sm:w-auto"
               >
                 <Link className="h-4 w-4 mr-2" />
                 Generate Viva Link
@@ -655,11 +655,11 @@ export default function VivaGeneratorPage() {
                   <CheckCircle2 className="h-5 w-5" />
                   <span className="font-medium">Viva Link Generated!</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Input 
                     value={vivaLink} 
                     readOnly 
-                    className="flex-1 bg-gray-50 text-sm"
+                    className="flex-1 bg-gray-50 text-xs sm:text-sm"
                   />
                   <Button 
                     variant="outline" 
@@ -714,38 +714,41 @@ export default function VivaGeneratorPage() {
                 <button
                   onClick={() => setInputMode("topic")}
                   className={cn(
-                    "flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-1.5",
+                    "flex-1 py-2 px-2 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-1 sm:gap-1.5",
                     inputMode === "topic"
                       ? "bg-background shadow-sm text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <Lightbulb className="h-4 w-4" />
-                  Topic Only
+                  <Lightbulb className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                  <span className="hidden sm:inline">Topic Only</span>
+                  <span className="sm:hidden">Topic</span>
                 </button>
                 <button
                   onClick={() => setInputMode("file")}
                   className={cn(
-                    "flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-1.5",
+                    "flex-1 py-2 px-2 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-1 sm:gap-1.5",
                     inputMode === "file"
                       ? "bg-background shadow-sm text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <Upload className="h-4 w-4" />
-                  Upload File
+                  <Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                  <span className="hidden sm:inline">Upload File</span>
+                  <span className="sm:hidden">Upload</span>
                 </button>
                 <button
                   onClick={() => setInputMode("text")}
                   className={cn(
-                    "flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-1.5",
+                    "flex-1 py-2 px-2 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-1 sm:gap-1.5",
                     inputMode === "text"
                       ? "bg-background shadow-sm text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <FileText className="h-4 w-4" />
-                  Paste Text
+                  <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                  <span className="hidden sm:inline">Paste Text</span>
+                  <span className="sm:hidden">Text</span>
                 </button>
               </div>
 
