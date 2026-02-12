@@ -64,6 +64,18 @@ function parseTimestamp(ts: string): Date {
   return new Date();
 }
 
+async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
+  try {
+    const result = await pool.query(
+      'SELECT teacher_email FROM subjects WHERE LOWER(name) = LOWER($1) LIMIT 1',
+      [subjectName]
+    );
+    return result.rows[0]?.teacher_email || '';
+  } catch {
+    return '';
+  }
+}
+
 export async function POST() {
   try {
     const accessToken = await getAccessToken();
@@ -75,14 +87,66 @@ export async function POST() {
     oauth2Client.setCredentials({ access_token: accessToken });
     const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
 
+    let subjectsSynced = 0;
+    let topicsSynced = 0;
+
+    try {
+      const subjectsResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId: STUDENT_DATA_SHEET_ID,
+        range: "'Subjects'!A2:D",
+      });
+      const subjectRows = subjectsResponse.data.values || [];
+      for (const row of subjectRows) {
+        if (row[0]) {
+          await pool.query(
+            `INSERT INTO subjects (name, code, status, teacher_email) 
+             VALUES ($1, $2, 'active', $3) 
+             ON CONFLICT (name) DO UPDATE SET code = EXCLUDED.code, teacher_email = EXCLUDED.teacher_email`,
+            [row[0], row[1] || '', row[3] || null]
+          );
+          subjectsSynced++;
+        }
+      }
+    } catch (e) {
+      console.error("[Sync] Subjects sync error:", e);
+    }
+
+    try {
+      const topicsResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId: STUDENT_DATA_SHEET_ID,
+        range: "'Topics'!A2:D",
+      });
+      const topicRows = topicsResponse.data.values || [];
+      for (const row of topicRows) {
+        if (row[0] && row[1]) {
+          await pool.query(
+            `INSERT INTO topics (subject_name, name, status, teacher_email) 
+             VALUES ($1, $2, 'active', $3) 
+             ON CONFLICT (subject_name, name) DO NOTHING`,
+            [row[0], row[1], row[3] || null]
+          );
+          topicsSynced++;
+        }
+      }
+    } catch (e) {
+      console.error("[Sync] Topics sync error:", e);
+    }
+
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: STUDENT_DATA_SHEET_ID,
-      range: "'Viva Results'!A2:K",
+      range: "'Viva Results'!A2:L",
     });
 
     const rows = response.data.values || [];
     
-    await pool.query('TRUNCATE TABLE viva_results');
+    const dbCount = await pool.query('SELECT COUNT(*) as count FROM viva_results');
+    const existingCount = parseInt(dbCount.rows[0].count);
+    
+    if (existingCount > 0) {
+      await pool.query('TRUNCATE TABLE viva_results');
+    }
+    
+    const teacherEmailCache: Record<string, string> = {};
     
     let synced = 0;
     for (const row of rows) {
@@ -90,6 +154,7 @@ export async function POST() {
         const timestamp = parseTimestamp(row[0] || '');
         const questionsAnswered = row[5] ? parseInt(String(row[5]).match(/(\d+)/)?.[1] || '0', 10) : 0;
         const score = row[6] ? parseInt(String(row[6]).match(/(\d+)/)?.[1] || '0', 10) : 0;
+        const subjectName = row[3] || 'Unknown Subject';
         
         let evaluation = null;
         if (row[10]) {
@@ -101,22 +166,39 @@ export async function POST() {
           } catch {}
         }
 
+        let marksBreakdown = null;
+        if (row[11]) {
+          try {
+            const mbStr = String(row[11]).trim();
+            if (mbStr.startsWith('{') || mbStr.startsWith('[')) {
+              marksBreakdown = JSON.parse(mbStr);
+            }
+          } catch {}
+        }
+
+        if (!teacherEmailCache[subjectName]) {
+          teacherEmailCache[subjectName] = await getTeacherEmailForSubject(subjectName);
+        }
+        const teacherEmail = teacherEmailCache[subjectName];
+
         await pool.query(
           `INSERT INTO viva_results 
-           (timestamp, student_name, student_email, subject, topics, questions_answered, score, overall_feedback, transcript, recording_url, evaluation) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+           (timestamp, student_name, student_email, subject, topics, questions_answered, score, overall_feedback, transcript, recording_url, evaluation, teacher_email, marks_breakdown) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
           [
             timestamp,
             row[1] || 'Unknown',
             row[2] || '',
-            row[3] || 'Unknown Subject',
+            subjectName,
             row[4] || '',
             questionsAnswered,
             score,
             row[7] || '',
             row[8] || '',
             row[9] || null,
-            evaluation ? JSON.stringify(evaluation) : null
+            evaluation ? JSON.stringify(evaluation) : null,
+            teacherEmail || null,
+            marksBreakdown ? JSON.stringify(marksBreakdown) : null
           ]
         );
         synced++;
@@ -126,7 +208,9 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       synced,
-      message: `Synced ${synced} viva results from Google Sheets to database`
+      subjectsSynced,
+      topicsSynced,
+      message: `Synced ${subjectsSynced} subjects, ${topicsSynced} topics, ${synced} viva results from Google Sheets to database`
     });
   } catch (error) {
     console.error("[Sync] Error:", error);

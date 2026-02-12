@@ -167,7 +167,7 @@ export async function getVivaResults(teacherEmail?: string): Promise<VivaResult[
   const params: string[] = [];
   
   if (teacherEmail) {
-    query += ' WHERE teacher_email = $1';
+    query += ` WHERE (teacher_email = $1 OR (teacher_email IS NULL AND LOWER(subject) IN (SELECT LOWER(name) FROM subjects WHERE teacher_email = $1)))`;
     params.push(teacherEmail);
   }
   

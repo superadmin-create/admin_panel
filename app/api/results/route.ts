@@ -61,9 +61,12 @@ export async function GET(request: NextRequest) {
 
     let results = response.data || [];
     
-    // Filter by teacher if specified
+    // Filter by teacher if specified - only if results actually have teacherEmail field
     if (teacherEmail && results.length > 0) {
-      results = results.filter((r: any) => r.teacherEmail === teacherEmail);
+      const hasTeacherEmail = results.some((r: any) => r.teacherEmail);
+      if (hasTeacherEmail) {
+        results = results.filter((r: any) => r.teacherEmail === teacherEmail);
+      }
     }
 
     return NextResponse.json({
