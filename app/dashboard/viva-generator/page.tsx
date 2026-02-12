@@ -380,7 +380,7 @@ export default function VivaGeneratorPage() {
       params.set('topic', selectedTopics.join(','));
     }
     
-    const link = `https://fa4efc94-8e50-4690-906b-1db8890f5930-00-1fua1gs9falsj.sisko.replit.dev/?${params.toString()}`;
+    const link = `https://ai-viva--leapupindia.replit.app/?${params.toString()}`;
     setVivaLink(link);
     setLinkCopied(false);
   };
