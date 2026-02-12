@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { fetchTeacherCredentials } from "@/lib/sheets";
 import { getGoogleSheetsClient } from "@/lib/api/sheets";
 
+export const dynamic = "force-dynamic";
+
 const TEACHER_SHEET_ID = "1or1TVnD6Py-gZ1dSP25CJjwufDeQ_Pi-s1tKls3lq_0";
 
 export async function POST(request: NextRequest) {

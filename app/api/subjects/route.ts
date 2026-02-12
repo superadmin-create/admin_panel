@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { STUDENT_DATA_SHEET_ID, getGoogleSheetsClient } from "@/lib/api/sheets";
 import * as db from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 const SUBJECTS_SHEET_NAME = "Subjects";
 
 export async function GET(request: NextRequest) {

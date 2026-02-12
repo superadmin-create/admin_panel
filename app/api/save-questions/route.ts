@@ -3,6 +3,8 @@ import { saveQuestionsToSheets } from "@/lib/api/save-questions";
 import { STUDENT_DATA_SHEET_ID, getGoogleSheetsClient } from "@/lib/api/sheets";
 import * as db from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 const SUBJECTS_SHEET_NAME = "Subjects";
 
 async function ensureSubjectExists(subjectName: string): Promise<void> {

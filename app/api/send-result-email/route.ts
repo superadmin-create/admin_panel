@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 
+export const dynamic = "force-dynamic";
+
 // Lazy initialization to avoid build-time errors when API key is not set
 let resendClient: Resend | null = null;
 
