@@ -67,17 +67,43 @@ function parseTimestamp(ts: string): Date {
 async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
   try {
     const result = await pool.query(
-      'SELECT teacher_email FROM subjects WHERE LOWER(name) = LOWER($1) LIMIT 1',
+      'SELECT teacher_email FROM subjects WHERE LOWER(name) = LOWER($1) AND teacher_email IS NOT NULL AND teacher_email != \'\' LIMIT 1',
       [subjectName]
     );
-    return result.rows[0]?.teacher_email || '';
-  } catch {
-    return '';
+    if (result.rows[0]?.teacher_email) return result.rows[0].teacher_email;
+
+    const fuzzyResult = await pool.query(
+      `SELECT teacher_email FROM subjects 
+       WHERE teacher_email IS NOT NULL AND teacher_email != '' 
+       AND (LOWER($1) LIKE '%' || LOWER(name) || '%' OR LOWER(name) LIKE '%' || LOWER($1) || '%'
+       OR similarity(LOWER(name), LOWER($1)) > 0.3)
+       ORDER BY similarity(LOWER(name), LOWER($1)) DESC
+       LIMIT 1`,
+      [subjectName]
+    );
+    return fuzzyResult.rows[0]?.teacher_email || '';
+  } catch (err) {
+    try {
+      const fuzzyResult = await pool.query(
+        `SELECT teacher_email FROM subjects 
+         WHERE teacher_email IS NOT NULL AND teacher_email != '' 
+         AND (LOWER($1) LIKE '%' || LOWER(name) || '%' OR LOWER(name) LIKE '%' || LOWER($1) || '%')
+         LIMIT 1`,
+        [subjectName]
+      );
+      return fuzzyResult.rows[0]?.teacher_email || '';
+    } catch {
+      return '';
+    }
   }
 }
 
 export async function POST() {
   try {
+    try {
+      await pool.query('CREATE EXTENSION IF NOT EXISTS pg_trgm');
+    } catch {}
+
     const accessToken = await getAccessToken();
     if (!accessToken) {
       return NextResponse.json({ error: "No Google Sheets access" }, { status: 500 });
