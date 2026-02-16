@@ -55,6 +55,8 @@ export default function ResultsPage() {
   const [activeTab, setActiveTab] = useState("all");
   const [selectedResult, setSelectedResult] = useState<VivaResult | null>(null);
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const getTeacherEmail = () => {
     if (typeof window !== 'undefined') {
@@ -89,6 +91,28 @@ export default function ResultsPage() {
       setError(err instanceof Error ? err.message : "Failed to load results");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSyncVapi = async () => {
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const response = await fetch("/api/sync-vapi", { method: "POST" });
+      const data = await response.json();
+      if (data.success) {
+        setSyncMessage(`${data.newResults} new, ${data.updatedResults} updated`);
+        await fetchResults();
+        setTimeout(() => setSyncMessage(null), 5000);
+      } else {
+        setSyncMessage(data.error || "Sync failed");
+        setTimeout(() => setSyncMessage(null), 5000);
+      }
+    } catch (err) {
+      setSyncMessage("Failed to sync");
+      setTimeout(() => setSyncMessage(null), 5000);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -419,7 +443,20 @@ export default function ResultsPage() {
                   Complete record of all AI viva examinations
                 </CardDescription>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={handleSyncVapi} variant="default" size="sm" disabled={syncing}>
+                  {syncing ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Sync Results
+                    </>
+                  )}
+                </Button>
                 <Button onClick={fetchResults} variant="outline" size="sm">
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Refresh
@@ -429,6 +466,9 @@ export default function ResultsPage() {
                   Export CSV
                 </Button>
               </div>
+              {syncMessage && (
+                <p className="text-sm text-muted-foreground mt-2">{syncMessage}</p>
+              )}
             </div>
           </CardHeader>
           <CardContent>
