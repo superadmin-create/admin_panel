@@ -47,6 +47,7 @@ Database tables:
 - `topics` - Topics associated with subjects
 - `viva_results` - Student viva examination results
 - `viva_questions` - Generated viva questions
+- `teacher_documents` - Uploaded documents stored for future reuse (linked to teacher_email)
 
 ## Environment Variables
 - `DATABASE_URL` - PostgreSQL connection string
@@ -83,6 +84,10 @@ Database tables:
   - Returns: `verified: true/false`, student info if found
 
 ## Recent Changes
+- 2026-02-16: Documents uploaded in Viva Generator are now saved to database (teacher_documents table) for future reuse
+- 2026-02-16: Added saved documents panel in Upload and Q&A modes - teachers can reuse previously uploaded documents
+- 2026-02-16: Added DOCX file support for document upload (using mammoth library)
+- 2026-02-16: Fixed pdf-parse library (downgraded from v2 to v1 for compatibility)
 - 2026-02-10: Made entire webapp mobile-responsive with collapsible sidebar, hamburger menu, responsive grids/tables
 - 2026-02-10: Added Q&A Document upload mode in Viva Generator - extracts questions only from uploaded Q&A documents
 - 2026-02-10: Question source now has 4 modes: Topic, Upload, Text, Q&A

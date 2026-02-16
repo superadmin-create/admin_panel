@@ -210,4 +210,60 @@ export async function getVivaQuestions(subject?: string): Promise<VivaQuestion[]
   return result.rows;
 }
 
+export interface TeacherDocument {
+  id: number;
+  teacher_email: string;
+  file_name: string;
+  file_type: string;
+  file_size: number | null;
+  subject: string | null;
+  extracted_text: string;
+  created_at: Date;
+}
+
+export async function saveTeacherDocument(
+  teacherEmail: string,
+  fileName: string,
+  fileType: string,
+  fileSize: number | null,
+  subject: string | null,
+  extractedText: string
+): Promise<TeacherDocument> {
+  const result = await pool.query(
+    `INSERT INTO teacher_documents (teacher_email, file_name, file_type, file_size, subject, extracted_text)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING *`,
+    [teacherEmail, fileName, fileType, fileSize, subject, extractedText]
+  );
+  return result.rows[0];
+}
+
+export async function getTeacherDocuments(teacherEmail: string): Promise<TeacherDocument[]> {
+  const result = await pool.query(
+    `SELECT id, teacher_email, file_name, file_type, file_size, subject, 
+            LENGTH(extracted_text) as text_length, created_at
+     FROM teacher_documents 
+     WHERE teacher_email = $1 
+     ORDER BY created_at DESC`,
+    [teacherEmail]
+  );
+  return result.rows;
+}
+
+export async function getTeacherDocumentById(id: number, teacherEmail: string): Promise<TeacherDocument | null> {
+  const result = await pool.query(
+    'SELECT * FROM teacher_documents WHERE id = $1 AND teacher_email = $2',
+    [id, teacherEmail]
+  );
+  return result.rows[0] || null;
+}
+
+export async function deleteTeacherDocument(id: number, teacherEmail: string): Promise<boolean> {
+  const result = await pool.query(
+    'DELETE FROM teacher_documents WHERE id = $1 AND teacher_email = $2',
+    [id, teacherEmail]
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
 export { pool };

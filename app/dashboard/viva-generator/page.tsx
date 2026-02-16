@@ -74,6 +74,16 @@ interface Topic {
   status: string;
 }
 
+interface SavedDocument {
+  id: number;
+  file_name: string;
+  file_type: string;
+  file_size: number | null;
+  subject: string | null;
+  text_length: number;
+  created_at: string;
+}
+
 const difficultyColors = {
   easy: "bg-emerald-100 text-emerald-700 border-emerald-200",
   medium: "bg-amber-100 text-amber-700 border-amber-200",
@@ -109,6 +119,9 @@ export default function VivaGeneratorPage() {
   const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
   const [isLoadingTopics, setIsLoadingTopics] = useState(true);
   const [customTopics, setCustomTopics] = useState("");
+  const [savedDocuments, setSavedDocuments] = useState<SavedDocument[]>([]);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null);
+  const [isLoadingDocs, setIsLoadingDocs] = useState(false);
 
   const subject = selectedSubjects.join(", ");
   const topics = [...selectedTopics, ...customTopics.split(",").map(t => t.trim()).filter(Boolean)].join(", ");
@@ -125,6 +138,27 @@ export default function VivaGeneratorPage() {
     }
     return '';
   };
+
+  const fetchSavedDocuments = async () => {
+    const teacherEmail = getTeacherEmail();
+    if (!teacherEmail) return;
+    setIsLoadingDocs(true);
+    try {
+      const response = await fetch(`/api/teacher-documents?teacherEmail=${encodeURIComponent(teacherEmail)}`);
+      const data = await response.json();
+      if (data.success) {
+        setSavedDocuments(data.documents || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch saved documents:", err);
+    } finally {
+      setIsLoadingDocs(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSavedDocuments();
+  }, []);
 
   // Fetch subjects on mount
   useEffect(() => {
@@ -246,13 +280,13 @@ export default function VivaGeneratorPage() {
       return selectedSubjects.length > 0 || selectedTopics.length > 0;
     }
     if (inputMode === "file") {
-      return file !== null;
+      return file !== null || selectedDocumentId !== null;
     }
     if (inputMode === "text") {
       return textContent.trim().length > 0;
     }
     if (inputMode === "qa") {
-      return qaFile !== null;
+      return qaFile !== null || selectedDocumentId !== null;
     }
     return false;
   };
@@ -276,14 +310,24 @@ export default function VivaGeneratorPage() {
 
     try {
       const formData = new FormData();
+      const teacherEmail = getTeacherEmail();
 
       if (inputMode === "topic") {
         formData.append("topicOnly", "true");
-      } else if (inputMode === "file" && file) {
-        formData.append("document", file);
-      } else if (inputMode === "qa" && qaFile) {
-        formData.append("document", qaFile);
-        formData.append("qaMode", "true");
+      } else if (inputMode === "file") {
+        if (selectedDocumentId) {
+          formData.append("savedDocumentId", selectedDocumentId.toString());
+        } else if (file) {
+          formData.append("document", file);
+        }
+      } else if (inputMode === "qa") {
+        if (selectedDocumentId) {
+          formData.append("savedDocumentId", selectedDocumentId.toString());
+          formData.append("qaMode", "true");
+        } else if (qaFile) {
+          formData.append("document", qaFile);
+          formData.append("qaMode", "true");
+        }
       } else if (inputMode === "text") {
         formData.append("textContent", textContent);
       }
@@ -292,6 +336,9 @@ export default function VivaGeneratorPage() {
       formData.append("topics", topics);
       formData.append("difficulty", difficulty);
       formData.append("questionCount", questionCount.toString());
+      if (teacherEmail) {
+        formData.append("teacherEmail", teacherEmail);
+      }
 
       const response = await fetch("/api/generate-viva", {
         method: "POST",
@@ -315,6 +362,9 @@ export default function VivaGeneratorPage() {
       }
 
       setGeneratedViva(data);
+      if (file || qaFile) {
+        fetchSavedDocuments();
+      }
     } catch (err) {
       console.error("Generation error:", err);
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -360,12 +410,45 @@ export default function VivaGeneratorPage() {
     setGeneratedViva(null);
     setError(null);
     setSaveSuccess(false);
+    setSelectedDocumentId(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
     if (qaFileInputRef.current) {
       qaFileInputRef.current.value = "";
     }
+  };
+
+  const handleDeleteDocument = async (docId: number) => {
+    const teacherEmail = getTeacherEmail();
+    if (!teacherEmail) return;
+    try {
+      const response = await fetch(
+        `/api/teacher-documents?id=${docId}&teacherEmail=${encodeURIComponent(teacherEmail)}`,
+        { method: "DELETE" }
+      );
+      if (response.ok) {
+        setSavedDocuments(prev => prev.filter(d => d.id !== docId));
+        if (selectedDocumentId === docId) {
+          setSelectedDocumentId(null);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to delete document:", err);
+    }
+  };
+
+  const formatFileSize = (bytes: number | null) => {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString("en-IN", {
+      day: "numeric", month: "short", year: "numeric"
+    });
   };
 
   const generateVivaLink = () => {
@@ -788,56 +871,120 @@ export default function VivaGeneratorPage() {
                   </p>
                 </div>
               ) : inputMode === "file" ? (
-                <div
-                  onDrop={handleDrop}
-                  onDragOver={(e) => e.preventDefault()}
-                  className={cn(
-                    "relative border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer hover:border-primary/50 hover:bg-primary/5",
-                    file ? "border-primary bg-primary/5" : "border-border"
-                  )}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,.txt,.md,.docx"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  {file ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-center gap-2 text-primary">
-                        <CheckCircle2 className="h-8 w-8" />
+                <div className="space-y-4">
+                  {selectedDocumentId ? (
+                    <div className="p-4 rounded-xl border-2 border-primary bg-primary/5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-5 w-5 text-primary" />
+                          <div>
+                            <p className="font-medium text-sm">
+                              {savedDocuments.find(d => d.id === selectedDocumentId)?.file_name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">Using saved document</p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedDocumentId(null)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <X className="h-4 w-4 mr-1" />
+                          Clear
+                        </Button>
                       </div>
-                      <p className="font-medium">{file.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {(file.size / 1024).toFixed(1)} KB
-                      </p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFile(null);
-                          if (fileInputRef.current) {
-                            fileInputRef.current.value = "";
-                          }
-                        }}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4 mr-1" />
-                        Remove
-                      </Button>
                     </div>
                   ) : (
+                    <div
+                      onDrop={handleDrop}
+                      onDragOver={(e) => e.preventDefault()}
+                      className={cn(
+                        "relative border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer hover:border-primary/50 hover:bg-primary/5",
+                        file ? "border-primary bg-primary/5" : "border-border"
+                      )}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf,.txt,.md,.docx"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                      {file ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-center gap-2 text-primary">
+                            <CheckCircle2 className="h-8 w-8" />
+                          </div>
+                          <p className="font-medium">{file.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {(file.size / 1024).toFixed(1)} KB
+                          </p>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFile(null);
+                              if (fileInputRef.current) {
+                                fileInputRef.current.value = "";
+                              }
+                            }}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Remove
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Upload className="h-10 w-10 mx-auto text-muted-foreground" />
+                          <p className="font-medium">
+                            Drop your document here or click to browse
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Supports PDF, DOCX, TXT, and MD files
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {savedDocuments.length > 0 && !file && !selectedDocumentId && (
                     <div className="space-y-2">
-                      <Upload className="h-10 w-10 mx-auto text-muted-foreground" />
-                      <p className="font-medium">
-                        Drop your document here or click to browse
+                      <p className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5" />
+                        Or use a saved document:
                       </p>
-                      <p className="text-sm text-muted-foreground">
-                        Supports PDF, DOCX, TXT, and MD files
-                      </p>
+                      <div className="max-h-40 overflow-y-auto space-y-1.5 rounded-lg border p-2 bg-muted/20">
+                        {savedDocuments.map(doc => (
+                          <div
+                            key={doc.id}
+                            className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-background hover:bg-accent/50 transition-colors cursor-pointer group"
+                            onClick={() => { setSelectedDocumentId(doc.id); setFile(null); }}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText className="h-4 w-4 text-primary shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">{doc.file_name}</p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {doc.file_type.toUpperCase()} {formatFileSize(doc.file_size)} &middot; {formatDate(doc.created_at)}
+                                  {doc.subject && <> &middot; {doc.subject}</>}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive shrink-0"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteDocument(doc.id); }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -849,7 +996,32 @@ export default function VivaGeneratorPage() {
                   onChange={(e) => setTextContent(e.target.value)}
                 />
               ) : (
-                <div
+                <div className="space-y-4">
+                  {selectedDocumentId ? (
+                    <div className="p-4 rounded-xl border-2 border-orange-400 bg-orange-50/50">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-5 w-5 text-orange-600" />
+                          <div>
+                            <p className="font-medium text-sm">
+                              {savedDocuments.find(d => d.id === selectedDocumentId)?.file_name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">Using saved document for Q&A extraction</p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedDocumentId(null)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <X className="h-4 w-4 mr-1" />
+                          Clear
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                  <div
                   onDrop={(e) => {
                     e.preventDefault();
                     const droppedFile = e.dataTransfer.files[0];
@@ -934,6 +1106,45 @@ export default function VivaGeneratorPage() {
                         <Download className="h-3 w-3" />
                         Download sample format
                       </a>
+                    </div>
+                  )}
+                </div>
+                  )}
+
+                  {savedDocuments.length > 0 && !qaFile && !selectedDocumentId && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5" />
+                        Or use a saved document:
+                      </p>
+                      <div className="max-h-40 overflow-y-auto space-y-1.5 rounded-lg border p-2 bg-muted/20">
+                        {savedDocuments.map(doc => (
+                          <div
+                            key={doc.id}
+                            className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-background hover:bg-orange-50/50 transition-colors cursor-pointer group"
+                            onClick={() => { setSelectedDocumentId(doc.id); setQaFile(null); }}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <ClipboardList className="h-4 w-4 text-orange-500 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">{doc.file_name}</p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {doc.file_type.toUpperCase()} {formatFileSize(doc.file_size)} &middot; {formatDate(doc.created_at)}
+                                  {doc.subject && <> &middot; {doc.subject}</>}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive shrink-0"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteDocument(doc.id); }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

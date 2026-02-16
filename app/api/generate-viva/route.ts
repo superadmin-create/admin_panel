@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import mammoth from "mammoth";
+import { saveTeacherDocument, getTeacherDocumentById } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -281,32 +282,52 @@ export async function POST(request: NextRequest) {
     const qaMode = formData.get("qaMode") === "true";
     const questionCountRaw = formData.get("questionCount") as string | null;
     const questionCount = Math.min(Math.max(parseInt(questionCountRaw || "5", 10) || 5, 1), 20);
+    const teacherEmail = formData.get("teacherEmail") as string | null;
+    const savedDocumentId = formData.get("savedDocumentId") as string | null;
 
     let documentText: string | null = null;
+    let uploadedFileName: string | null = null;
+    let uploadedFileType: string | null = null;
+    let uploadedFileSize: number | null = null;
 
     // If not topic-only mode, try to get document content
     if (!topicOnly) {
-      if (file && file.size > 0) {
+      if (savedDocumentId && teacherEmail) {
+        const savedDoc = await getTeacherDocumentById(parseInt(savedDocumentId), teacherEmail);
+        if (savedDoc) {
+          documentText = savedDoc.extracted_text;
+        } else {
+          return NextResponse.json(
+            { error: "Saved document not found" },
+            { status: 404 }
+          );
+        }
+      } else if (file && file.size > 0) {
         try {
           const buffer = Buffer.from(await file.arrayBuffer());
           const fileName = file.name.toLowerCase();
+          uploadedFileName = file.name;
+          uploadedFileSize = file.size;
 
           if (
             file.type === "application/pdf" ||
             fileName.endsWith(".pdf")
           ) {
             documentText = await extractTextFromPDF(buffer);
+            uploadedFileType = "pdf";
           } else if (
             fileName.endsWith(".docx") ||
             file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           ) {
             documentText = await extractTextFromDOCX(buffer);
+            uploadedFileType = "docx";
           } else if (
             file.type === "text/plain" ||
             fileName.endsWith(".txt") ||
             fileName.endsWith(".md")
           ) {
             documentText = buffer.toString("utf-8");
+            uploadedFileType = fileName.endsWith(".md") ? "md" : "txt";
           } else {
             return NextResponse.json(
               {
@@ -316,8 +337,22 @@ export async function POST(request: NextRequest) {
               { status: 400 }
             );
           }
+
+          if (documentText && teacherEmail && uploadedFileName) {
+            try {
+              await saveTeacherDocument(
+                teacherEmail,
+                uploadedFileName,
+                uploadedFileType || "unknown",
+                uploadedFileSize,
+                subject !== "General" ? subject : null,
+                documentText
+              );
+            } catch (saveErr) {
+              console.error("Failed to save document to DB (non-fatal):", saveErr);
+            }
+          }
         } catch (error) {
-          // If PDF parsing fails, return a clear error
           console.error("File processing error:", error);
           return NextResponse.json(
             {
