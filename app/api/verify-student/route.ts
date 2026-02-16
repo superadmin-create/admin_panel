@@ -7,17 +7,17 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email } = body;
+    const { email, phone } = body;
 
-    if (!email) {
+    if (!email && !phone) {
       return NextResponse.json(
-        { error: "Email is required" },
+        { error: "Email or phone is required" },
         { status: 400 }
       );
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (email && !emailRegex.test(email)) {
       return NextResponse.json(
         { error: "Invalid email format" },
         { status: 400 }
@@ -25,15 +25,19 @@ export async function POST(request: Request) {
     }
 
     try {
-      const result: EdmingleVerifyStudentResponse = await verifyStudent(email);
+      const result: EdmingleVerifyStudentResponse = await verifyStudent(
+        email || phone
+      );
 
       if (result.verified && result.studentData) {
         return NextResponse.json({
+          success: true,
           verified: true,
           studentData: {
             name: result.studentData.fullName || 
               `${result.studentData.firstName} ${result.studentData.lastName}`.trim(),
             email: result.studentData.email,
+            phone: result.studentData.phone,
             enrolledCourses: result.studentData.enrolledCourses || [],
             batchId: result.studentData.batchId,
             courseId: result.studentData.courseId,
@@ -41,21 +45,20 @@ export async function POST(request: Request) {
         });
       }
 
-      return NextResponse.json(
-        {
-          verified: false,
-          error: "Student not found in the system",
-        },
-        { status: 404 }
-      );
+      return NextResponse.json({
+        success: true,
+        verified: false,
+        message: "Student not found. Please ensure you are registered with your institution.",
+      });
     } catch (error) {
       console.error("Error verifying student with Edmingle:", error);
 
       if (error instanceof Error && error.message.includes("not configured")) {
         return NextResponse.json(
           {
+            success: false,
             verified: false,
-            error: "LMS service is not configured. Please contact administrator.",
+            message: "LMS service is not configured. Please contact administrator.",
           },
           { status: 503 }
         );
@@ -64,30 +67,19 @@ export async function POST(request: Request) {
       if (error instanceof Error && error.message.includes("Unable to connect")) {
         return NextResponse.json(
           {
+            success: false,
             verified: false,
-            error: "Unable to connect to student database. Please try again later.",
+            message: "Unable to connect to student database. Please try again later.",
           },
           { status: 503 }
         );
       }
 
-      if (error instanceof Error && 
-          (error.message.includes("404") || 
-           error.message.includes("Not Found") ||
-           error.message.includes("No such user"))) {
-        return NextResponse.json(
-          {
-            verified: false,
-            error: "Student not found in the system",
-          },
-          { status: 404 }
-        );
-      }
-
       return NextResponse.json(
         {
+          success: false,
           verified: false,
-          error: "Failed to verify student. Please try again later.",
+          message: "Failed to verify student. Please try again later.",
         },
         { status: 500 }
       );
@@ -96,8 +88,9 @@ export async function POST(request: Request) {
     console.error("Error in verify-student route:", error);
     return NextResponse.json(
       {
+        success: false,
         verified: false,
-        error: "Internal server error",
+        message: "Internal server error",
       },
       { status: 500 }
     );
