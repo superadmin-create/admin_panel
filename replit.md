@@ -1,7 +1,7 @@
-# AI Viva Admin Panel (Teacher Portal)
+# AI Viva Admin Panel (Teacher Portal + Student Flow)
 
 ## Overview
-The teacher-facing admin panel for AI Viva. This works alongside a separate student-facing app (ai-viva). This is a TypeScript-based web application using:
+The unified AI Viva platform with both teacher admin panel and integrated student viva flow. Previously the student flow was a separate app (ai-viva) but is now fully integrated. This is a TypeScript-based web application using:
 - Next.js 14 (App Router)
 - React 18
 - Tailwind CSS
@@ -80,10 +80,30 @@ Database tables:
 
 ### Student Verification
 - `POST /api/verify-student` - Verify student against Edmingle before allowing viva access
-  - Required: `email` or `phone`
+  - Required: `email`
   - Returns: `verified: true/false`, student info if found
 
+### OTP Verification
+- `POST /api/send-otp` - Send OTP verification email to student
+  - Required: `email`
+  - Uses Resend email service (RESEND_API_KEY required)
+- `POST /api/verify-otp` - Verify student's OTP code
+  - Required: `email`, `otp` (6-digit code)
+  - Returns: `verified: true/false`
+
+## Student Flow (Integrated from ai-viva)
+The student viva flow is fully integrated at `/student` routes:
+1. `/student` - Registration form (name, email, phone, subject selection or locked from URL)
+2. `/student/verify` - OTP email verification (6-digit code sent via Resend)
+3. `/student/viva` - VAPI voice AI viva session with audio visualizer
+4. `/student/complete` - Success page with confetti animation
+
+Flow: Student fills form → Edmingle verification → OTP email sent → OTP verified → VAPI viva session → Completion
+
 ## Recent Changes
+- 2026-02-16: Integrated ai-viva student flow with OTP email verification (Resend)
+- 2026-02-16: Student registration now supports subject dropdown (fetched from API) and locked subjects from URL
+- 2026-02-16: Added teacherEmail pass-through from student registration to VapiSession
 - 2026-02-16: Documents uploaded in Viva Generator are now saved to database (teacher_documents table) for future reuse
 - 2026-02-16: Added saved documents panel in Upload and Q&A modes - teachers can reuse previously uploaded documents
 - 2026-02-16: Added DOCX file support for document upload (using mammoth library)

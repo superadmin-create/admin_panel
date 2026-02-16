@@ -31,6 +31,7 @@ interface VapiSessionProps {
   studentName: string;
   subject: string;
   topics?: string[];
+  teacherEmail?: string;
   questionCount?: number;
   onSessionEnd: (transcript?: string) => void;
   onStatusChange: (status: CallStatus) => void;
@@ -49,6 +50,7 @@ export const VapiSession = forwardRef<VapiSessionHandle, VapiSessionProps>(
       studentName,
       subject,
       topics = [],
+      teacherEmail = "",
       questionCount,
       onSessionEnd,
       onStatusChange,
