@@ -464,7 +464,8 @@ export default function VivaGeneratorPage() {
     }
     params.set('questions', questionCount.toString());
     
-    const link = `https://ai-viva--leapupindia.replit.app/?${params.toString()}`;
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const link = `${baseUrl}/student?${params.toString()}`;
     setVivaLink(link);
     setLinkCopied(false);
   };
