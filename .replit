@@ -50,9 +50,13 @@ args = "cd /home/runner/workspace && npx tsx scripts/auto-sync.ts"
 localPort = 5000
 externalPort = 80
 
+[[ports]]
+localPort = 5001
+externalPort = 3000
+
 [deployment]
-deploymentTarget = "autoscale"
-run = ["node", ".next/standalone/server.js"]
+deploymentTarget = "vm"
+run = ["npm", "run", "start"]
 build = ["npm", "run", "build"]
 
 [userenv]
