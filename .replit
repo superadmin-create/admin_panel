@@ -57,7 +57,7 @@ externalPort = 3000
 [deployment]
 deploymentTarget = "vm"
 build = ["npm", "run", "build"]
-run = ["bash", "-c", "npx tsx scripts/auto-sync.ts & npm run start"]
+run = ["bash", "-c", "nohup npx tsx scripts/auto-sync.ts > /tmp/auto-sync.log 2>&1 & npm run start"]
 
 [userenv]
 
