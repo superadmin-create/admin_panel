@@ -27,13 +27,13 @@ args = "Auto Sync"
 name = "Next.js Dev Server"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
-
-[workflows.workflow.metadata]
-outputType = "webview"
 
 [[workflows.workflow]]
 name = "Auto Sync"
@@ -50,14 +50,10 @@ args = "cd /home/runner/workspace && npx tsx scripts/auto-sync.ts"
 localPort = 5000
 externalPort = 80
 
-[[ports]]
-localPort = 5001
-externalPort = 3000
-
 [deployment]
 deploymentTarget = "vm"
 build = ["npm", "run", "build"]
-run = ["npm", "run", "start"]
+run = ["node", "server.js"]
 
 [userenv]
 
