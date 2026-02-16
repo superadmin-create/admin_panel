@@ -174,31 +174,38 @@ Generate exactly ${questionCount} questions with a mix of difficulty levels. Que
 - Cover different aspects of the subject
 - Be appropriate for oral examination
 - Include practical/real-world applications where relevant`
-    : `You are an expert teacher and examiner. Your task is to generate viva (oral examination) questions STRICTLY based on the document content provided.
+    : `You are an expert teacher and examiner. Your task is to generate viva (oral examination) questions using the provided content as your knowledge source.
 
-CRITICAL INSTRUCTION: You must ONLY use information from the document provided. Do NOT add any external knowledge, general facts, or information not explicitly present in the document. Every question and expected answer must be directly traceable to specific content in the document.
+CRITICAL INSTRUCTIONS:
+1. You must ONLY use information from the provided content. Do NOT add any external knowledge or information not present in the content.
+2. NEVER reference "the document", "the text", "the passage", "the material", "according to the document", or any similar phrasing in your questions. Ask questions DIRECTLY as a teacher would in an oral exam — as if the student is expected to know the material, not read from a source.
+
+BAD example: "According to the document, how do indicators compare to price action trading?"
+GOOD example: "How do indicators compare to price action trading?"
+
+BAD example: "Based on the text, what are the three types of machine learning?"
+GOOD example: "What are the three types of machine learning?"
 
 You must respond with valid JSON in exactly this format:
 {
-  "documentSummary": "A 2-3 sentence summary of the document content provided",
+  "documentSummary": "A 2-3 sentence summary of what the questions cover",
   "topics": ["topic1", "topic2", "topic3"],
   "questions": [
     {
       "id": 1,
-      "question": "The viva question based on document content",
-      "expectedAnswer": "An expected answer using ONLY information from the document",
+      "question": "A direct viva question (no document references)",
+      "expectedAnswer": "A comprehensive expected answer",
       "difficulty": "easy|medium|hard",
-      "topic": "The specific topic from the document"
+      "topic": "The specific topic this question covers"
     }
   ]
 }
 
 Generate exactly ${questionCount} questions. Questions MUST:
-- Be answerable ONLY using the document content provided
-- Reference specific concepts, facts, or details from the document
-- Have expected answers that quote or paraphrase the document
-- NOT require any external knowledge beyond the document
-- Cover different sections/topics within the document`;
+- Be direct questions a teacher would ask in an oral exam
+- NEVER mention or reference "the document", "the text", "the passage", or any source material
+- Use ONLY information from the provided content
+- Cover different topics within the provided content`;
 
   let userPrompt: string;
 
@@ -221,18 +228,16 @@ Include a mix of:
 ${topics ? `Focus Topics: ${topics}` : ""}
 Preferred Difficulty: ${difficulty}
 
-IMPORTANT: Generate questions EXCLUSIVELY from the document content provided below. Do NOT use any external knowledge or information not present in this document. All questions and expected answers must be directly derived from and answerable using ONLY the text provided.
+IMPORTANT: Generate questions using ONLY the content provided below. Do NOT use any external knowledge. Ask questions DIRECTLY — do NOT say "according to the document" or reference any source material in the questions.
 
-Document Content:
+Content:
 ${documentText!.slice(0, 15000)}
 
-Based ONLY on this document content, generate ${questionCount} viva questions that:
-1. Can be answered using ONLY information from the document above
-2. Test the student's understanding of the specific content in this document
-3. Include expected answers that reference specific points from the document
-4. Do NOT require any knowledge beyond what is written in the document
-
-Every question must be directly answerable from the provided text.`;
+Generate ${questionCount} viva questions that:
+1. Are asked directly as a teacher would ask in an oral exam
+2. NEVER mention "the document", "the text", "the passage", or any source
+3. Use ONLY information from the content above
+4. Test the student's understanding of the material`;
   }
 
   const response = await openai.chat.completions.create({
