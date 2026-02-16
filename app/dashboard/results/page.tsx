@@ -101,7 +101,8 @@ export default function ResultsPage() {
       const response = await fetch("/api/sync-vapi", { method: "POST" });
       const data = await response.json();
       if (data.success) {
-        setSyncMessage(`${data.newResults} new, ${data.updatedResults} updated`);
+        const sheetsInfo = data.sheetsSynced > 0 ? `, ${data.sheetsSynced} added to Sheets` : '';
+        setSyncMessage(`${data.newResults} new, ${data.updatedResults} updated${sheetsInfo}`);
         await fetchResults();
         setTimeout(() => setSyncMessage(null), 5000);
       } else {

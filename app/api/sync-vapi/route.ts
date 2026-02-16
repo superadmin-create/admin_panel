@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { pool } from "@/lib/db";
+import { google } from "googleapis";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const VAPI_API_URL = "https://api.vapi.ai";
+const STUDENT_DATA_SHEET_ID = "1dPderiJxJl534xNnzHVVqye9VSx3zZY3ZEgO3vjqpFY";
 
 interface VapiCall {
   id: string;
@@ -23,6 +25,67 @@ interface VapiCall {
   messages?: { role: string; message: string }[];
   transcript?: string;
   recordingUrl?: string;
+}
+
+async function getGoogleSheetsAccessToken(): Promise<string | null> {
+  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+  if (!hostname) return null;
+
+  const xReplitToken = process.env.REPL_IDENTITY
+    ? "repl " + process.env.REPL_IDENTITY
+    : process.env.WEB_REPL_RENEWAL
+    ? "depl " + process.env.WEB_REPL_RENEWAL
+    : null;
+
+  if (!xReplitToken) return null;
+
+  try {
+    const response = await fetch(
+      "https://" + hostname + "/api/v2/connection?include_secrets=true&connector_names=google-sheet",
+      { headers: { Accept: "application/json", X_REPLIT_TOKEN: xReplitToken } }
+    );
+    const data = await response.json();
+    return data.items?.[0]?.settings?.access_token || null;
+  } catch {
+    return null;
+  }
+}
+
+async function appendToGoogleSheet(data: any): Promise<boolean> {
+  try {
+    const accessToken = await getGoogleSheetsAccessToken();
+    if (!accessToken) return false;
+
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const sheets = google.sheets({ version: "v4", auth: oauth2Client });
+
+    const values = [[
+      data.timestamp instanceof Date ? data.timestamp.toISOString() : data.timestamp,
+      data.studentName,
+      data.studentEmail || "",
+      data.subject,
+      data.topics,
+      data.questionsAnswered.toString(),
+      data.score.toString(),
+      data.overallFeedback || "",
+      data.transcript || "",
+      data.recordingUrl || "",
+      data.evaluation ? JSON.stringify(data.evaluation) : "",
+    ]];
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
+      range: "'Viva Results'!A:K",
+      valueInputOption: "RAW",
+      requestBody: { values },
+    });
+
+    return true;
+  } catch (error: any) {
+    console.error("[Sync VAPI] Sheet append error:", error?.message);
+    return false;
+  }
 }
 
 function parseSystemPrompt(call: VapiCall): { studentName?: string; studentEmail?: string; subject?: string; topics?: string } {
@@ -168,6 +231,7 @@ export async function POST() {
     let synced = 0;
     let updated = 0;
     let skipped = 0;
+    let sheetsSynced = 0;
 
     for (const call of allCalls) {
       if (call.status !== "ended") {
@@ -239,6 +303,9 @@ export async function POST() {
           ]
         );
         synced++;
+
+        const sheetSuccess = await appendToGoogleSheet(data);
+        if (sheetSuccess) sheetsSynced++;
       }
     }
 
@@ -248,7 +315,8 @@ export async function POST() {
       newResults: synced,
       updatedResults: updated,
       skipped,
-      message: `Synced from VAPI: ${synced} new, ${updated} updated, ${skipped} skipped`,
+      sheetsSynced,
+      message: `Synced from VAPI: ${synced} new, ${updated} updated, ${skipped} skipped, ${sheetsSynced} added to Sheets`,
     });
   } catch (error: any) {
     console.error("[Sync VAPI] Error:", error);
