@@ -1,12 +1,21 @@
 import { Pool } from 'pg';
 import { google } from 'googleapis';
 import OpenAI from 'openai';
+import { readFileSync } from 'fs';
 
 const SYNC_INTERVAL_MS = 5 * 60 * 1000;
 const VAPI_API_URL = 'https://api.vapi.ai';
 const STUDENT_DATA_SHEET_ID = '1dPderiJxJl534xNnzHVVqye9VSx3zZY3ZEgO3vjqpFY';
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+function getDatabaseUrl(): string {
+  try {
+    const url = readFileSync('/tmp/replitdb', 'utf-8').trim();
+    if (url) return url;
+  } catch {}
+  return process.env.DATABASE_URL || '';
+}
+
+const pool = new Pool({ connectionString: getDatabaseUrl() });
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // AI-powered evaluation function

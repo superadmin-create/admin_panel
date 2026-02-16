@@ -1,7 +1,16 @@
 import { Pool } from 'pg';
+import { readFileSync } from 'fs';
+
+function getDatabaseUrl(): string {
+  try {
+    const url = readFileSync('/tmp/replitdb', 'utf-8').trim();
+    if (url) return url;
+  } catch {}
+  return process.env.DATABASE_URL || '';
+}
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: getDatabaseUrl(),
 });
 
 export interface Subject {
