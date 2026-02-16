@@ -206,8 +206,8 @@ export default function VivaGeneratorPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      const validTypes = ["application/pdf", "text/plain"];
-      const validExtensions = [".pdf", ".txt", ".md"];
+      const validTypes = ["application/pdf", "text/plain", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+      const validExtensions = [".pdf", ".txt", ".md", ".docx"];
       const isValidType = validTypes.includes(selectedFile.type);
       const isValidExtension = validExtensions.some((ext) =>
         selectedFile.name.toLowerCase().endsWith(ext)
@@ -217,7 +217,7 @@ export default function VivaGeneratorPage() {
         setFile(selectedFile);
         setError(null);
       } else {
-        setError("Please upload a PDF or text file");
+        setError("Please upload a PDF, DOCX, or text file");
         setFile(null);
       }
     }
@@ -227,7 +227,7 @@ export default function VivaGeneratorPage() {
     e.preventDefault();
     const droppedFile = e.dataTransfer.files[0];
     if (droppedFile) {
-      const validExtensions = [".pdf", ".txt", ".md"];
+      const validExtensions = [".pdf", ".txt", ".md", ".docx"];
       const isValidExtension = validExtensions.some((ext) =>
         droppedFile.name.toLowerCase().endsWith(ext)
       );
@@ -236,7 +236,7 @@ export default function VivaGeneratorPage() {
         setFile(droppedFile);
         setError(null);
       } else {
-        setError("Please upload a PDF or text file");
+        setError("Please upload a PDF, DOCX, or text file");
       }
     }
   };
@@ -800,7 +800,7 @@ export default function VivaGeneratorPage() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".pdf,.txt,.md"
+                    accept=".pdf,.txt,.md,.docx"
                     onChange={handleFileChange}
                     className="hidden"
                   />
@@ -836,7 +836,7 @@ export default function VivaGeneratorPage() {
                         Drop your document here or click to browse
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        Supports PDF, TXT, and MD files
+                        Supports PDF, DOCX, TXT, and MD files
                       </p>
                     </div>
                   )}
@@ -923,7 +923,7 @@ export default function VivaGeneratorPage() {
                         The viva will use <strong>only</strong> questions from this document.
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Supports PDF, TXT, and MD files
+                        Supports PDF, DOCX, TXT, and MD files
                       </p>
                       <a
                         href="/sample-qa-document.txt"

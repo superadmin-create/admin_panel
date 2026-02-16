@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import mammoth from "mammoth";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -23,7 +25,6 @@ interface GenerateVivaResponse {
 
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   try {
-    // Use require for pdf-parse as it has CommonJS issues with dynamic import
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const pdfParse = require("pdf-parse/lib/pdf-parse.js");
     const data = await pdfParse(buffer);
@@ -36,7 +37,6 @@ async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   } catch (error) {
     console.error("PDF extraction error:", error);
     
-    // Provide helpful error messages
     if (error instanceof Error) {
       if (error.message.includes("password")) {
         throw new Error("This PDF is password-protected. Please remove the password or use Topic Only mode.");
@@ -51,6 +51,24 @@ async function extractTextFromPDF(buffer: Buffer): Promise<string> {
     
     throw new Error(
       "Could not read this PDF. Try using 'Topic Only' mode or 'Paste Text' mode instead."
+    );
+  }
+}
+
+async function extractTextFromDOCX(buffer: Buffer): Promise<string> {
+  try {
+    const result = await mammoth.extractRawText({ buffer });
+    const text = result.value;
+    
+    if (!text || text.trim().length === 0) {
+      throw new Error("Document appears to be empty");
+    }
+    
+    return text;
+  } catch (error) {
+    console.error("DOCX extraction error:", error);
+    throw new Error(
+      "Could not read this document. Try using 'Paste Text' mode instead."
     );
   }
 }
@@ -271,23 +289,29 @@ export async function POST(request: NextRequest) {
       if (file && file.size > 0) {
         try {
           const buffer = Buffer.from(await file.arrayBuffer());
+          const fileName = file.name.toLowerCase();
 
           if (
             file.type === "application/pdf" ||
-            file.name.toLowerCase().endsWith(".pdf")
+            fileName.endsWith(".pdf")
           ) {
             documentText = await extractTextFromPDF(buffer);
           } else if (
+            fileName.endsWith(".docx") ||
+            file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          ) {
+            documentText = await extractTextFromDOCX(buffer);
+          } else if (
             file.type === "text/plain" ||
-            file.name.endsWith(".txt") ||
-            file.name.endsWith(".md")
+            fileName.endsWith(".txt") ||
+            fileName.endsWith(".md")
           ) {
             documentText = buffer.toString("utf-8");
           } else {
             return NextResponse.json(
               {
                 error:
-                  "Unsupported file format. Please upload PDF or TXT files, or use Topic Only mode.",
+                  "Unsupported file format. Please upload PDF, DOCX, or TXT files.",
               },
               { status: 400 }
             );
