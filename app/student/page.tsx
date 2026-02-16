@@ -37,6 +37,7 @@ function StudentFormContent() {
   
   const subject = searchParams.get('subject') || '';
   const topic = searchParams.get('topic') || '';
+  const questionCount = searchParams.get('questions') || '';
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -85,6 +86,7 @@ function StudentFormContent() {
         studentId: verifyResult.studentData?.id,
         subject: subject,
         topic: topic || undefined,
+        questionCount: questionCount ? parseInt(questionCount, 10) : undefined,
       };
 
       sessionStorage.setItem("studentFormData", JSON.stringify(studentData));

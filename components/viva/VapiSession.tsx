@@ -31,6 +31,7 @@ interface VapiSessionProps {
   studentName: string;
   subject: string;
   topics?: string[];
+  questionCount?: number;
   onSessionEnd: (transcript?: string) => void;
   onStatusChange: (status: CallStatus) => void;
   onCallStart: () => void;
@@ -48,6 +49,7 @@ export const VapiSession = forwardRef<VapiSessionHandle, VapiSessionProps>(
       studentName,
       subject,
       topics = [],
+      questionCount,
       onSessionEnd,
       onStatusChange,
       onCallStart,
@@ -68,6 +70,7 @@ export const VapiSession = forwardRef<VapiSessionHandle, VapiSessionProps>(
     const studentEmailRef = useRef(studentEmail);
     const subjectRef = useRef(subject);
     const topicsRef = useRef(topics);
+    const questionCountRef = useRef(questionCount);
 
     useEffect(() => {
       onSessionEndRef.current = onSessionEnd;
@@ -78,7 +81,8 @@ export const VapiSession = forwardRef<VapiSessionHandle, VapiSessionProps>(
       studentEmailRef.current = studentEmail;
       subjectRef.current = subject;
       topicsRef.current = topics;
-    }, [onSessionEnd, onStatusChange, onCallStart, onError, studentName, studentEmail, subject, topics]);
+      questionCountRef.current = questionCount;
+    }, [onSessionEnd, onStatusChange, onCallStart, onError, studentName, studentEmail, subject, topics, questionCount]);
 
     // Stop function
     const stopCall = useCallback(() => {
@@ -343,19 +347,24 @@ export const VapiSession = forwardRef<VapiSessionHandle, VapiSessionProps>(
             const questionsData = await questionsResponse.json();
             
             if (questionsData.success && questionsData.questions?.length > 0) {
-              console.log(`[VapiSession] ✓ Found ${questionsData.questions.length} custom questions${selectedTopic ? ` for topic: ${selectedTopic}` : ""}`);
-              console.log(`[VapiSession] Questions from API:`, questionsData.questions.map((q: any) => q.question));
+              let questions = questionsData.questions;
               
-              // Format questions clearly for the AI
-              // Use a clear format that the AI can easily parse and ask
-              customQuestions = questionsData.questions
+              const maxQuestions = questionCountRef.current;
+              if (maxQuestions && maxQuestions > 0 && questions.length > maxQuestions) {
+                console.log(`[VapiSession] Limiting questions from ${questions.length} to ${maxQuestions}`);
+                questions = questions.slice(0, maxQuestions);
+              }
+              
+              console.log(`[VapiSession] ✓ Using ${questions.length} custom questions${selectedTopic ? ` for topic: ${selectedTopic}` : ""}`);
+              console.log(`[VapiSession] Questions from API:`, questions.map((q: any) => q.question));
+              
+              customQuestions = questions
                 .map((q: { question: string; expectedAnswer: string }, i: number) => 
                   `Question ${i + 1}: ${q.question}\nExpected Answer: ${q.expectedAnswer}`
                 )
                 .join("\n\n");
               
-              // Add instructions for the AI
-              customQuestions = `You must ask these questions in order:\n\n${customQuestions}\n\nIMPORTANT: Ask these questions ONE AT A TIME. Wait for the student's complete answer before asking the next question.`;
+              customQuestions = `You must ask EXACTLY ${questions.length} questions. No more, no less. Ask these questions in order:\n\n${customQuestions}\n\nIMPORTANT: Ask these questions ONE AT A TIME. Wait for the student's complete answer before asking the next question. After asking all ${questions.length} questions, conclude the viva session.`;
               
               console.log(`[VapiSession] Formatted questions length: ${customQuestions.length} characters`);
               console.log(`[VapiSession] Questions preview:`, customQuestions.substring(0, 300) + "...");
@@ -378,6 +387,7 @@ export const VapiSession = forwardRef<VapiSessionHandle, VapiSessionProps>(
             studentEmail: studentEmailRef.current || "",
             subject: subjectRef.current || "General",
             topics: topicsValue || "general topics",
+            questionCount: String(questionCountRef.current || 5),
           };
 
           // Build a brief first message that starts the viva immediately
@@ -397,7 +407,7 @@ export const VapiSession = forwardRef<VapiSessionHandle, VapiSessionProps>(
             topics: topicsValue || "general topics",
             customQuestions: customQuestions 
               ? `IMPORTANT: You MUST use ONLY the following pre-generated questions. Do NOT create your own questions. Ask these exact questions in order and evaluate the student's answers against the expected answers provided.\n\n${customQuestions}`
-              : `No pre-generated questions are available. Generate 5 relevant questions based on the subject "${subjectRef.current || "General"}" and topics "${topicsValue || "general topics"}". Ask questions that test understanding of the material.`,
+              : `No pre-generated questions are available. Generate exactly ${questionCountRef.current || 5} relevant questions based on the subject "${subjectRef.current || "General"}" and topics "${topicsValue || "general topics"}". Ask questions that test understanding of the material. After asking all ${questionCountRef.current || 5} questions, conclude the session.`,
             hasGeneratedQuestions: customQuestions ? "true" : "false",
           };
 

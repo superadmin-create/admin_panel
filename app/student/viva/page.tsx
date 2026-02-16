@@ -18,6 +18,7 @@ interface StudentFormData {
   subject: string;
   topic?: string;
   batchId?: string;
+  questionCount?: number;
 }
 
 export default function VivaPage() {
@@ -216,6 +217,7 @@ export default function VivaPage() {
             studentName={studentData.fullName}
             subject={studentData.subject}
             topics={studentData.topic && studentData.topic !== "all" ? [studentData.topic] : []}
+            questionCount={studentData.questionCount}
             onSessionEnd={handleSessionEnd}
             onStatusChange={setCallStatus}
             onCallStart={() => {
