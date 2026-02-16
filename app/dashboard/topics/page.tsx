@@ -130,31 +130,49 @@ export default function TopicsPage() {
   const handleAddTopic = async () => {
     if (!newTopicName.trim() || !newTopicSubject) return;
 
+    const topicNames = newTopicName
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
+    if (topicNames.length === 0) return;
+
     setIsAdding(true);
+    const failed: string[] = [];
     try {
       const teacherEmail = getTeacherEmail();
-      const response = await fetch("/api/topics", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subject: newTopicSubject,
-          name: newTopicName.trim(),
-          teacherEmail,
-        }),
-      });
+      for (const name of topicNames) {
+        try {
+          const response = await fetch("/api/topics", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              subject: newTopicSubject,
+              name,
+              teacherEmail,
+            }),
+          });
+          const data = await response.json();
+          if (!data.success) {
+            failed.push(name);
+          }
+        } catch {
+          failed.push(name);
+        }
+      }
 
-      const data = await response.json();
-      if (data.success) {
-        await fetchTopics();
+      await fetchTopics();
+      if (failed.length === 0) {
         setShowAddDialog(false);
         setNewTopicName("");
         setNewTopicSubject("");
       } else {
-        alert(data.error || "Failed to add topic");
+        alert(`Failed to add: ${failed.join(", ")}`);
+        setNewTopicName(failed.join(", "));
       }
     } catch (error) {
-      console.error("Failed to add topic:", error);
-      alert("Failed to add topic");
+      console.error("Failed to add topics:", error);
+      alert("Failed to add topics");
     } finally {
       setIsAdding(false);
     }
@@ -351,13 +369,16 @@ export default function TopicsPage() {
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-1 block">
-                      Topic Name *
+                      Topic Name(s) *
                     </label>
                     <Input
-                      placeholder="e.g., Binary Trees, Sorting Algorithms"
+                      placeholder="e.g., Binary Trees, Sorting Algorithms, Linked Lists"
                       value={newTopicName}
                       onChange={(e) => setNewTopicName(e.target.value)}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Separate multiple topics with commas
+                    </p>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-4">
@@ -371,7 +392,7 @@ export default function TopicsPage() {
                         Adding...
                       </>
                     ) : (
-                      "Add Topic"
+                      `Add Topic${newTopicName.includes(",") ? "s" : ""}`
                     )}
                   </Button>
                   <Button
