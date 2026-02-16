@@ -55,9 +55,9 @@ localPort = 5001
 externalPort = 3000
 
 [deployment]
-deploymentTarget = "autoscale"
+deploymentTarget = "vm"
 build = ["npm", "run", "build"]
-run = ["npm", "run", "start"]
+run = ["bash", "-c", "npx tsx scripts/auto-sync.ts & npm run start"]
 
 [userenv]
 
