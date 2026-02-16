@@ -61,6 +61,16 @@ export async function GET(request: NextRequest) {
       console.error("[Results API] Database error, falling back to Sheets:", dbError?.message || dbError);
     }
 
+    if (teacherEmail) {
+      return NextResponse.json({
+        success: true,
+        data: [],
+        count: 0,
+        source: 'database',
+        message: 'No results found for your account. Try clicking Sync Results to fetch from VAPI.'
+      });
+    }
+
     try {
       const response = await withTimeout(
         getVivaResults(),
@@ -78,19 +88,10 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      let results = response.data || [];
-      
-      if (teacherEmail && results.length > 0) {
-        const hasTeacherEmail = results.some((r: any) => r.teacherEmail);
-        if (hasTeacherEmail) {
-          results = results.filter((r: any) => r.teacherEmail === teacherEmail);
-        }
-      }
-
       return NextResponse.json({
         success: true,
-        data: results,
-        count: results.length,
+        data: response.data || [],
+        count: (response.data || []).length,
         source: 'sheets'
       });
     } catch (sheetsError: any) {
@@ -112,5 +113,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
-

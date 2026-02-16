@@ -25,6 +25,7 @@ interface VapiCall {
   messages?: { role: string; message: string }[];
   transcript?: string;
   recordingUrl?: string;
+  metadata?: Record<string, any>;
 }
 
 async function getGoogleSheetsAccessToken(): Promise<string | null> {
@@ -175,7 +176,7 @@ function extractVivaData(call: VapiCall) {
 async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
   try {
     const result = await pool.query(
-      "SELECT teacher_email FROM subjects WHERE LOWER(name) = LOWER($1) LIMIT 1",
+      "SELECT teacher_email FROM subjects WHERE LOWER(name) = LOWER($1) AND teacher_email IS NOT NULL AND teacher_email != '' LIMIT 1",
       [subjectName]
     );
     return result.rows[0]?.teacher_email || "";
@@ -249,7 +250,10 @@ export async function POST() {
         continue;
       }
 
-      const teacherEmail = await getTeacherEmailForSubject(data.subject);
+      let teacherEmail = (call.metadata as any)?.teacherEmail || "";
+      if (!teacherEmail) {
+        teacherEmail = await getTeacherEmailForSubject(data.subject);
+      }
 
       const existing = await pool.query(
         "SELECT id FROM viva_results WHERE vapi_call_id = $1",

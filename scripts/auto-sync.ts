@@ -595,7 +595,7 @@ function extractVivaData(call: VapiCall) {
 async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
   try {
     const result = await pool.query(
-      'SELECT teacher_email FROM subjects WHERE LOWER(name) = LOWER($1) LIMIT 1',
+      "SELECT teacher_email FROM subjects WHERE LOWER(name) = LOWER($1) AND teacher_email IS NOT NULL AND teacher_email != '' LIMIT 1",
       [subjectName]
     );
     return result.rows[0]?.teacher_email || '';
