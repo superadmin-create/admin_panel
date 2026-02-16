@@ -9,8 +9,14 @@ function getDatabaseUrl(): string {
   return process.env.DATABASE_URL || '';
 }
 
+const dbUrl = getDatabaseUrl();
+
 const pool = new Pool({
-  connectionString: getDatabaseUrl(),
+  connectionString: dbUrl,
+  connectionTimeoutMillis: 10000,
+  idleTimeoutMillis: 30000,
+  max: 10,
+  ssl: dbUrl.includes('neon.tech') ? { rejectUnauthorized: false } : undefined,
 });
 
 export interface Subject {

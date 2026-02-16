@@ -4,14 +4,26 @@ import * as db from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const teacherEmail = searchParams.get("teacherEmail");
 
-    // Try to get results from database first
     try {
-      const dbResults = await db.getVivaResults(teacherEmail || undefined);
+      const dbResults = await withTimeout(
+        db.getVivaResults(teacherEmail || undefined),
+        15000,
+        "Database query"
+      );
       
       if (dbResults.length > 0) {
         const formattedResults = dbResults.map((r, index) => ({
@@ -45,35 +57,52 @@ export async function GET(request: NextRequest) {
           source: 'database'
         });
       }
-    } catch (dbError) {
-      console.error("[Results API] Database error, falling back to Sheets:", dbError);
+    } catch (dbError: any) {
+      console.error("[Results API] Database error, falling back to Sheets:", dbError?.message || dbError);
     }
 
-    // Fallback to Google Sheets
-    const response = await getVivaResults();
-
-    if (!response.success) {
-      return NextResponse.json(
-        { error: response.error || "Failed to fetch results" },
-        { status: 500 }
+    try {
+      const response = await withTimeout(
+        getVivaResults(),
+        15000,
+        "Google Sheets query"
       );
-    }
 
-    let results = response.data || [];
-    
-    // Filter by teacher if specified - only if results actually have teacherEmail field
-    if (teacherEmail && results.length > 0) {
-      const hasTeacherEmail = results.some((r: any) => r.teacherEmail);
-      if (hasTeacherEmail) {
-        results = results.filter((r: any) => r.teacherEmail === teacherEmail);
+      if (!response.success) {
+        return NextResponse.json({
+          success: true,
+          data: [],
+          count: 0,
+          source: 'none',
+          message: 'No results available. Try clicking Sync Results to fetch from VAPI.'
+        });
       }
+
+      let results = response.data || [];
+      
+      if (teacherEmail && results.length > 0) {
+        const hasTeacherEmail = results.some((r: any) => r.teacherEmail);
+        if (hasTeacherEmail) {
+          results = results.filter((r: any) => r.teacherEmail === teacherEmail);
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: results,
+        count: results.length,
+        source: 'sheets'
+      });
+    } catch (sheetsError: any) {
+      console.error("[Results API] Sheets error:", sheetsError?.message || sheetsError);
     }
 
     return NextResponse.json({
       success: true,
-      data: results,
-      count: results.length,
-      source: 'sheets'
+      data: [],
+      count: 0,
+      source: 'none',
+      message: 'Could not reach database or Google Sheets. Try clicking Sync Results.'
     });
   } catch (error) {
     console.error("[API] Error fetching results:", error);
