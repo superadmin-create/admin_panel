@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { queryWithRetry } from "@/lib/db";
 import { fetchVivaResults } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
@@ -21,12 +21,12 @@ interface VivaResult {
 
 export async function GET() {
   try {
-    const dbResult = await pool.query(
+    const dbResult = await queryWithRetry(
       `SELECT * FROM viva_results ORDER BY timestamp DESC`
     );
 
     if (dbResult.rows.length > 0) {
-      const data: VivaResult[] = dbResult.rows.map((row, index) => ({
+      const data: VivaResult[] = dbResult.rows.map((row: any, index: number) => ({
         id: `VIVA${String(row.id).padStart(3, "0")}`,
         dateTime: row.timestamp?.toISOString() || new Date().toISOString(),
         studentName: row.student_name || "Unknown",

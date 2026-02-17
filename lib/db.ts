@@ -1,23 +1,40 @@
-import { Pool } from 'pg';
-import { readFileSync } from 'fs';
-
-function getDatabaseUrl(): string {
-  try {
-    const url = readFileSync('/tmp/replitdb', 'utf-8').trim();
-    if (url) return url;
-  } catch {}
-  return process.env.DATABASE_URL || '';
-}
-
-const dbUrl = getDatabaseUrl();
+import { Pool, PoolClient } from 'pg';
 
 const pool = new Pool({
-  connectionString: dbUrl,
-  connectionTimeoutMillis: 10000,
+  connectionString: process.env.DATABASE_URL || '',
+  connectionTimeoutMillis: 15000,
   idleTimeoutMillis: 30000,
-  max: 10,
-  ssl: dbUrl.includes('neon.tech') ? { rejectUnauthorized: false } : undefined,
+  max: 5,
+  ssl: (process.env.DATABASE_URL || '').includes('neon.tech') ? { rejectUnauthorized: false } : undefined,
 });
+
+pool.on('error', (err) => {
+  console.error('[DB Pool] Unexpected error on idle client:', err.message);
+});
+
+async function queryWithRetry(text: string, params?: any[], retries = 3): Promise<any> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const result = await pool.query(text, params);
+      return result;
+    } catch (error: any) {
+      const isConnectionError = 
+        error.code === 'ECONNREFUSED' ||
+        error.code === 'ECONNRESET' ||
+        error.code === '57P01' ||
+        error.message?.includes('Connection terminated') ||
+        error.message?.includes('connection timeout') ||
+        error.message?.includes('Connection refused');
+      
+      if (isConnectionError && attempt < retries) {
+        console.warn(`[DB] Connection error (attempt ${attempt}/${retries}):`, error.message);
+        await new Promise(r => setTimeout(r, 1000 * attempt));
+        continue;
+      }
+      throw error;
+    }
+  }
+}
 
 export interface Subject {
   id: number;
@@ -70,12 +87,12 @@ export async function getSubjects(teacherEmail?: string): Promise<Subject[]> {
   }
   
   query += ' ORDER BY name';
-  const result = await pool.query(query, params);
+  const result = await queryWithRetry(query, params);
   return result.rows;
 }
 
 export async function createSubject(name: string, code: string = '', teacherEmail?: string): Promise<Subject> {
-  const result = await pool.query(
+  const result = await queryWithRetry(
     'INSERT INTO subjects (name, code, status, teacher_email) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO UPDATE SET code = EXCLUDED.code, teacher_email = COALESCE(EXCLUDED.teacher_email, subjects.teacher_email) RETURNING *',
     [name, code, 'active', teacherEmail || null]
   );
@@ -83,12 +100,12 @@ export async function createSubject(name: string, code: string = '', teacherEmai
 }
 
 export async function updateSubject(oldName: string, newName: string, code?: string): Promise<Subject | null> {
-  const result = await pool.query(
+  const result = await queryWithRetry(
     'UPDATE subjects SET name = $1, code = COALESCE($2, code), updated_at = CURRENT_TIMESTAMP WHERE name = $3 RETURNING *',
     [newName, code, oldName]
   );
   if (result.rows.length > 0) {
-    await pool.query(
+    await queryWithRetry(
       'UPDATE topics SET subject_name = $1 WHERE subject_name = $2',
       [newName, oldName]
     );
@@ -97,7 +114,7 @@ export async function updateSubject(oldName: string, newName: string, code?: str
 }
 
 export async function deleteSubject(name: string): Promise<boolean> {
-  const result = await pool.query(
+  const result = await queryWithRetry(
     'DELETE FROM subjects WHERE name = $1',
     [name]
   );
@@ -121,12 +138,12 @@ export async function getTopics(subjectFilter?: string, teacherEmail?: string): 
   }
   
   query += ' ORDER BY subject_name, name';
-  const result = await pool.query(query, params);
+  const result = await queryWithRetry(query, params);
   return result.rows;
 }
 
 export async function createTopic(subjectName: string, name: string, teacherEmail?: string): Promise<Topic> {
-  const result = await pool.query(
+  const result = await queryWithRetry(
     'INSERT INTO topics (subject_name, name, status, teacher_email) VALUES ($1, $2, $3, $4) ON CONFLICT (subject_name, name) DO NOTHING RETURNING *',
     [subjectName, name, 'active', teacherEmail || null]
   );
@@ -139,7 +156,7 @@ export async function updateTopic(
   newSubject: string,
   newName: string
 ): Promise<Topic | null> {
-  const result = await pool.query(
+  const result = await queryWithRetry(
     'UPDATE topics SET subject_name = $1, name = $2, updated_at = CURRENT_TIMESTAMP WHERE LOWER(subject_name) = LOWER($3) AND LOWER(name) = LOWER($4) RETURNING *',
     [newSubject, newName, oldSubject, oldName]
   );
@@ -147,7 +164,7 @@ export async function updateTopic(
 }
 
 export async function deleteTopic(subjectName: string, name: string): Promise<boolean> {
-  const result = await pool.query(
+  const result = await queryWithRetry(
     'DELETE FROM topics WHERE LOWER(subject_name) = LOWER($1) AND LOWER(name) = LOWER($2)',
     [subjectName, name]
   );
@@ -155,7 +172,7 @@ export async function deleteTopic(subjectName: string, name: string): Promise<bo
 }
 
 export async function saveVivaResult(result: Omit<VivaResult, 'id'>): Promise<VivaResult> {
-  const queryResult = await pool.query(
+  const queryResult = await queryWithRetry(
     `INSERT INTO viva_results 
      (timestamp, student_name, student_email, subject, topics, questions_answered, score, overall_feedback, transcript, recording_url, evaluation) 
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
@@ -187,7 +204,7 @@ export async function getVivaResults(teacherEmail?: string): Promise<VivaResult[
   }
   
   query += ' ORDER BY timestamp DESC';
-  const result = await pool.query(query, params);
+  const result = await queryWithRetry(query, params);
   return result.rows;
 }
 
@@ -199,7 +216,7 @@ export async function saveVivaQuestions(
   const savedQuestions: VivaQuestion[] = [];
   
   for (const q of questions) {
-    const result = await pool.query(
+    const result = await queryWithRetry(
       `INSERT INTO viva_questions (subject, topics, question, expected_answer, difficulty, active) 
        VALUES ($1, $2, $3, $4, $5, true) 
        RETURNING *`,
@@ -221,7 +238,7 @@ export async function getVivaQuestions(subject?: string): Promise<VivaQuestion[]
   }
   
   query += ' ORDER BY created_at DESC';
-  const result = await pool.query(query, params);
+  const result = await queryWithRetry(query, params);
   return result.rows;
 }
 
@@ -244,7 +261,7 @@ export async function saveTeacherDocument(
   subject: string | null,
   extractedText: string
 ): Promise<TeacherDocument> {
-  const result = await pool.query(
+  const result = await queryWithRetry(
     `INSERT INTO teacher_documents (teacher_email, file_name, file_type, file_size, subject, extracted_text)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
@@ -254,7 +271,7 @@ export async function saveTeacherDocument(
 }
 
 export async function getTeacherDocuments(teacherEmail: string): Promise<TeacherDocument[]> {
-  const result = await pool.query(
+  const result = await queryWithRetry(
     `SELECT id, teacher_email, file_name, file_type, file_size, subject, 
             LENGTH(extracted_text) as text_length, created_at
      FROM teacher_documents 
@@ -266,7 +283,7 @@ export async function getTeacherDocuments(teacherEmail: string): Promise<Teacher
 }
 
 export async function getTeacherDocumentById(id: number, teacherEmail: string): Promise<TeacherDocument | null> {
-  const result = await pool.query(
+  const result = await queryWithRetry(
     'SELECT * FROM teacher_documents WHERE id = $1 AND teacher_email = $2',
     [id, teacherEmail]
   );
@@ -274,11 +291,11 @@ export async function getTeacherDocumentById(id: number, teacherEmail: string): 
 }
 
 export async function deleteTeacherDocument(id: number, teacherEmail: string): Promise<boolean> {
-  const result = await pool.query(
+  const result = await queryWithRetry(
     'DELETE FROM teacher_documents WHERE id = $1 AND teacher_email = $2',
     [id, teacherEmail]
   );
   return (result.rowCount ?? 0) > 0;
 }
 
-export { pool };
+export { pool, queryWithRetry };

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { queryWithRetry } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -39,9 +39,9 @@ export async function GET(request: NextRequest) {
     
     query += ` GROUP BY student_name, student_email ORDER BY last_viva_date DESC`;
 
-    const result = await pool.query(query, params);
+    const result = await queryWithRetry(query, params);
     
-    const students = result.rows.map((row, index) => ({
+    const students = result.rows.map((row: any, index: number) => ({
       id: `STU${String(index + 1).padStart(4, '0')}`,
       name: row.name,
       email: row.email || '',

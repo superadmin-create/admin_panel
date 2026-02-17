@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { queryWithRetry } from "@/lib/db";
 import { google } from "googleapis";
 
 export const dynamic = "force-dynamic";
@@ -66,13 +66,13 @@ function parseTimestamp(ts: string): Date {
 
 async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
   try {
-    const result = await pool.query(
+    const result = await queryWithRetry(
       'SELECT teacher_email FROM subjects WHERE LOWER(name) = LOWER($1) AND teacher_email IS NOT NULL AND teacher_email != \'\' LIMIT 1',
       [subjectName]
     );
     if (result.rows[0]?.teacher_email) return result.rows[0].teacher_email;
 
-    const fuzzyResult = await pool.query(
+    const fuzzyResult = await queryWithRetry(
       `SELECT teacher_email FROM subjects 
        WHERE teacher_email IS NOT NULL AND teacher_email != '' 
        AND (LOWER($1) LIKE '%' || LOWER(name) || '%' OR LOWER(name) LIKE '%' || LOWER($1) || '%'
@@ -84,7 +84,7 @@ async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
     return fuzzyResult.rows[0]?.teacher_email || '';
   } catch (err) {
     try {
-      const fuzzyResult = await pool.query(
+      const fuzzyResult = await queryWithRetry(
         `SELECT teacher_email FROM subjects 
          WHERE teacher_email IS NOT NULL AND teacher_email != '' 
          AND (LOWER($1) LIKE '%' || LOWER(name) || '%' OR LOWER(name) LIKE '%' || LOWER($1) || '%')
@@ -101,7 +101,7 @@ async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
 export async function POST() {
   try {
     try {
-      await pool.query('CREATE EXTENSION IF NOT EXISTS pg_trgm');
+      await queryWithRetry('CREATE EXTENSION IF NOT EXISTS pg_trgm');
     } catch {}
 
     const accessToken = await getAccessToken();
@@ -124,7 +124,7 @@ export async function POST() {
       const subjectRows = subjectsResponse.data.values || [];
       for (const row of subjectRows) {
         if (row[0]) {
-          await pool.query(
+          await queryWithRetry(
             `INSERT INTO subjects (name, code, status, teacher_email) 
              VALUES ($1, $2, 'active', $3) 
              ON CONFLICT (name) DO UPDATE SET code = EXCLUDED.code, teacher_email = EXCLUDED.teacher_email`,
@@ -145,7 +145,7 @@ export async function POST() {
       const topicRows = topicsResponse.data.values || [];
       for (const row of topicRows) {
         if (row[0] && row[1]) {
-          await pool.query(
+          await queryWithRetry(
             `INSERT INTO topics (subject_name, name, status, teacher_email) 
              VALUES ($1, $2, 'active', $3) 
              ON CONFLICT (subject_name, name) DO NOTHING`,
@@ -165,11 +165,11 @@ export async function POST() {
 
     const rows = response.data.values || [];
     
-    const dbCount = await pool.query('SELECT COUNT(*) as count FROM viva_results');
+    const dbCount = await queryWithRetry('SELECT COUNT(*) as count FROM viva_results');
     const existingCount = parseInt(dbCount.rows[0].count);
     
     if (existingCount > 0) {
-      await pool.query('TRUNCATE TABLE viva_results');
+      await queryWithRetry('TRUNCATE TABLE viva_results');
     }
     
     const teacherEmailCache: Record<string, string> = {};
@@ -207,7 +207,7 @@ export async function POST() {
         }
         const teacherEmail = teacherEmailCache[subjectName];
 
-        await pool.query(
+        await queryWithRetry(
           `INSERT INTO viva_results 
            (timestamp, student_name, student_email, subject, topics, questions_answered, score, overall_feedback, transcript, recording_url, evaluation, teacher_email, marks_breakdown) 
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
@@ -246,8 +246,8 @@ export async function POST() {
 
 export async function GET() {
   try {
-    const result = await pool.query('SELECT COUNT(*) as count FROM viva_results');
-    const lastSync = await pool.query('SELECT MAX(timestamp) as last FROM viva_results');
+    const result = await queryWithRetry('SELECT COUNT(*) as count FROM viva_results');
+    const lastSync = await queryWithRetry('SELECT MAX(timestamp) as last FROM viva_results');
     
     return NextResponse.json({
       count: parseInt(result.rows[0].count),

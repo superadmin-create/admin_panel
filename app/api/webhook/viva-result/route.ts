@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { queryWithRetry, pool } from "@/lib/db";
 import { appendVivaResultToSheet } from "@/lib/api/sheets-service-account";
 
 export const dynamic = "force-dynamic";
@@ -21,14 +21,14 @@ async function appendToSheet(result: any) {
       vapiCallId: result.vapiCallId || '',
     });
   } catch (error) {
-    console.error("Error appending to Google Sheets:", error);
+    console.error("[Webhook] Error appending to Google Sheets:", error);
     return false;
   }
 }
 
 async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
   try {
-    const result = await pool.query(
+    const result = await queryWithRetry(
       'SELECT teacher_email FROM subjects WHERE LOWER(name) = LOWER($1) LIMIT 1',
       [subjectName]
     );
@@ -42,14 +42,16 @@ async function saveToDatabase(result: any) {
   try {
     const timestamp = new Date();
     const evaluation = result.evaluation ? JSON.stringify(result.evaluation) : null;
-    
-    // Look up teacher email based on subject
     const teacherEmail = await getTeacherEmailForSubject(result.subject || '');
 
-    await pool.query(
+    await queryWithRetry(
       `INSERT INTO viva_results 
-       (timestamp, student_name, student_email, subject, topics, questions_answered, score, overall_feedback, transcript, recording_url, evaluation, teacher_email) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+       (timestamp, student_name, student_email, subject, topics, questions_answered, score, overall_feedback, transcript, recording_url, evaluation, teacher_email, vapi_call_id) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       ON CONFLICT (vapi_call_id) DO UPDATE SET
+         score = CASE WHEN EXCLUDED.score > 0 THEN EXCLUDED.score ELSE viva_results.score END,
+         evaluation = COALESCE(EXCLUDED.evaluation, viva_results.evaluation),
+         overall_feedback = CASE WHEN EXCLUDED.overall_feedback != '' THEN EXCLUDED.overall_feedback ELSE viva_results.overall_feedback END`,
       [
         timestamp,
         result.studentName || 'Unknown',
@@ -62,13 +64,14 @@ async function saveToDatabase(result: any) {
         result.transcript || '',
         result.recordingUrl || null,
         evaluation,
-        teacherEmail
+        teacherEmail,
+        result.vapiCallId || null
       ]
     );
 
     return true;
   } catch (error) {
-    console.error("Error saving to database:", error);
+    console.error("[Webhook] Error saving to database:", error);
     return false;
   }
 }
@@ -96,7 +99,6 @@ function parseSystemPrompt(messages: any[]): { studentName?: string; studentEmai
 }
 
 function normalizeVivaResult(payload: any): any {
-  // Check if this is a VAPI webhook payload (has 'message' with 'type' and 'call')
   if (payload.message?.type === 'end-of-call-report' && payload.message?.call) {
     const call = payload.message.call;
     const structuredData = call.analysis?.structuredData || {};
@@ -117,7 +119,6 @@ function normalizeVivaResult(payload: any): any {
     };
   }
   
-  // Check if this is a direct VAPI call object (has 'id', 'status', 'createdAt')
   if (payload.id && payload.status && payload.createdAt) {
     const structuredData = payload.analysis?.structuredData || {};
     const parsedPrompt = parseSystemPrompt(payload.messages || []);
@@ -137,7 +138,6 @@ function normalizeVivaResult(payload: any): any {
     };
   }
   
-  // Already in expected format (from student app)
   return payload;
 }
 
@@ -146,12 +146,9 @@ export async function POST(request: NextRequest) {
     const payload = await request.json();
     const messageType = payload.message?.type;
     
-    // Log incoming webhook for debugging
     console.log("[Webhook] Received payload type:", 
       messageType || (payload.id ? 'vapi-call' : 'direct'));
     
-    // IMPORTANT: Only process valid event types that contain actual viva data
-    // Ignore intermediate VAPI events that don't have student/subject info
     const ignoredEventTypes = [
       'speech-update',
       'conversation-update', 
@@ -164,7 +161,6 @@ export async function POST(request: NextRequest) {
     ];
     
     if (messageType && ignoredEventTypes.includes(messageType)) {
-      // Acknowledge the webhook but don't save anything
       console.log(`[Webhook] Ignoring intermediate event: ${messageType}`);
       return NextResponse.json({ 
         success: true, 
@@ -172,7 +168,6 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    // Only process: end-of-call-report, direct VAPI calls, or student app submissions
     const isEndOfCallReport = messageType === 'end-of-call-report';
     const isVapiCall = payload.id && payload.status && payload.createdAt;
     const isStudentAppSubmission = payload.studentName && !messageType && !payload.id;
@@ -185,10 +180,8 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    // Normalize the payload to expected format
     const result = normalizeVivaResult(payload);
 
-    // Log the extracted data for debugging
     console.log("[Webhook] Extracted data:", {
       studentName: result.studentName,
       studentEmail: result.studentEmail,
@@ -200,7 +193,6 @@ export async function POST(request: NextRequest) {
       vapiCallId: result.vapiCallId
     });
 
-    // Don't save if no valid student name or invalid subject
     const invalidNames = ['unknown student', 'unknown', 'transient assistant', '', 'test', 'test user'];
     const invalidSubjects = ['transient assistant', 'unknown subject', 'unknown', ''];
     

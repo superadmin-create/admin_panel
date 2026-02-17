@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       );
       
       if (dbResults.length > 0) {
-        const formattedResults = dbResults.map((r, index) => ({
+        const formattedResults = dbResults.map((r: any, index: number) => ({
           id: `VIVA${String(index + 1).padStart(4, '0')}`,
           timestamp: new Date(r.timestamp).toLocaleString('en-GB', {
             day: '2-digit',
@@ -46,8 +46,8 @@ export async function GET(request: NextRequest) {
           transcript: r.transcript || '',
           recordingUrl: r.recording_url || '',
           evaluation: r.evaluation,
-          marksBreakdown: (r as any).marks_breakdown || null,
-          teacherEmail: (r as any).teacher_email || ''
+          marksBreakdown: r.marks_breakdown || null,
+          teacherEmail: r.teacher_email || ''
         }));
 
         return NextResponse.json({

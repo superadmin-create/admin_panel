@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { pool } from "@/lib/db";
-import { google } from "googleapis";
+import { queryWithRetry } from "@/lib/db";
+import { appendVivaResultToSheet } from "@/lib/api/sheets-service-account";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const VAPI_API_URL = "https://api.vapi.ai";
-const STUDENT_DATA_SHEET_ID = "1dPderiJxJl534xNnzHVVqye9VSx3zZY3ZEgO3vjqpFY";
 
 interface VapiCall {
   id: string;
@@ -26,67 +25,6 @@ interface VapiCall {
   transcript?: string;
   recordingUrl?: string;
   metadata?: Record<string, any>;
-}
-
-async function getGoogleSheetsAccessToken(): Promise<string | null> {
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  if (!hostname) return null;
-
-  const xReplitToken = process.env.REPL_IDENTITY
-    ? "repl " + process.env.REPL_IDENTITY
-    : process.env.WEB_REPL_RENEWAL
-    ? "depl " + process.env.WEB_REPL_RENEWAL
-    : null;
-
-  if (!xReplitToken) return null;
-
-  try {
-    const response = await fetch(
-      "https://" + hostname + "/api/v2/connection?include_secrets=true&connector_names=google-sheet",
-      { headers: { Accept: "application/json", X_REPLIT_TOKEN: xReplitToken } }
-    );
-    const data = await response.json();
-    return data.items?.[0]?.settings?.access_token || null;
-  } catch {
-    return null;
-  }
-}
-
-async function appendToGoogleSheet(data: any): Promise<boolean> {
-  try {
-    const accessToken = await getGoogleSheetsAccessToken();
-    if (!accessToken) return false;
-
-    const oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({ access_token: accessToken });
-    const sheets = google.sheets({ version: "v4", auth: oauth2Client });
-
-    const values = [[
-      data.timestamp instanceof Date ? data.timestamp.toISOString() : data.timestamp,
-      data.studentName,
-      data.studentEmail || "",
-      data.subject,
-      data.topics,
-      data.questionsAnswered.toString(),
-      data.score.toString(),
-      data.overallFeedback || "",
-      data.transcript || "",
-      data.recordingUrl || "",
-      data.evaluation ? JSON.stringify(data.evaluation) : "",
-    ]];
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: STUDENT_DATA_SHEET_ID,
-      range: "'Viva Results'!A:K",
-      valueInputOption: "RAW",
-      requestBody: { values },
-    });
-
-    return true;
-  } catch (error: any) {
-    console.error("[Sync VAPI] Sheet append error:", error?.message);
-    return false;
-  }
 }
 
 function parseSystemPrompt(call: VapiCall): { studentName?: string; studentEmail?: string; subject?: string; topics?: string } {
@@ -116,44 +54,14 @@ function extractVivaData(call: VapiCall) {
   const structuredData = call.analysis?.structuredData || {};
   const parsedPrompt = parseSystemPrompt(call);
 
-  const studentName = structuredData.studentName ||
-    parsedPrompt.studentName ||
-    call.customer?.name ||
-    "Unknown Student";
-
-  const studentEmail = structuredData.studentEmail ||
-    structuredData.email ||
-    parsedPrompt.studentEmail ||
-    (call.customer as any)?.email ||
-    "";
-
-  const subject = structuredData.subject ||
-    parsedPrompt.subject ||
-    call.assistant?.name ||
-    "Unknown Subject";
-
-  const topics = structuredData.topics ||
-    structuredData.topic ||
-    parsedPrompt.topics ||
-    "";
-
-  const questionsAnswered = structuredData.questionsAnswered ||
-    structuredData.totalQuestions ||
-    0;
-
-  const score = structuredData.score ||
-    structuredData.totalMarks ||
-    structuredData.marks ||
-    0;
-
-  const overallFeedback = structuredData.overallFeedback ||
-    structuredData.feedback ||
-    call.analysis?.summary ||
-    "";
-
-  const evaluation = structuredData.evaluation ||
-    (structuredData.marks ? { marks: structuredData.marks, feedback: structuredData.feedback } : null);
-
+  const studentName = structuredData.studentName || parsedPrompt.studentName || call.customer?.name || "Unknown Student";
+  const studentEmail = structuredData.studentEmail || structuredData.email || parsedPrompt.studentEmail || (call.customer as any)?.email || "";
+  const subject = structuredData.subject || parsedPrompt.subject || call.assistant?.name || "Unknown Subject";
+  const topics = structuredData.topics || structuredData.topic || parsedPrompt.topics || "";
+  const questionsAnswered = structuredData.questionsAnswered || structuredData.totalQuestions || 0;
+  const score = structuredData.score || structuredData.totalMarks || structuredData.marks || 0;
+  const overallFeedback = structuredData.overallFeedback || structuredData.feedback || call.analysis?.summary || "";
+  const evaluation = structuredData.evaluation || (structuredData.marks ? { marks: structuredData.marks, feedback: structuredData.feedback } : null);
   const transcript = call.artifact?.transcript || (call as any).transcript || "";
   const recordingUrl = call.artifact?.recordingUrl || (call as any).recordingUrl || "";
 
@@ -175,7 +83,7 @@ function extractVivaData(call: VapiCall) {
 
 async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
   try {
-    const result = await pool.query(
+    const result = await queryWithRetry(
       "SELECT teacher_email FROM subjects WHERE LOWER(name) = LOWER($1) AND teacher_email IS NOT NULL AND teacher_email != '' LIMIT 1",
       [subjectName]
     );
@@ -255,13 +163,13 @@ export async function POST() {
         teacherEmail = await getTeacherEmailForSubject(data.subject);
       }
 
-      const existing = await pool.query(
+      const existing = await queryWithRetry(
         "SELECT id FROM viva_results WHERE vapi_call_id = $1",
         [data.vapiCallId]
       );
 
       if (existing.rows.length > 0) {
-        await pool.query(
+        await queryWithRetry(
           `UPDATE viva_results SET 
            timestamp = $1, student_name = $2, student_email = $3, subject = $4, 
            topics = $5, questions_answered = $6, score = $7, overall_feedback = $8, 
@@ -285,7 +193,7 @@ export async function POST() {
         );
         updated++;
       } else {
-        await pool.query(
+        await queryWithRetry(
           `INSERT INTO viva_results 
            (timestamp, student_name, student_email, subject, topics, questions_answered, 
             score, overall_feedback, transcript, recording_url, evaluation, vapi_call_id, teacher_email) 
@@ -308,8 +216,24 @@ export async function POST() {
         );
         synced++;
 
-        const sheetSuccess = await appendToGoogleSheet(data);
-        if (sheetSuccess) sheetsSynced++;
+        try {
+          await appendVivaResultToSheet({
+            studentName: data.studentName,
+            studentEmail: data.studentEmail,
+            subject: data.subject,
+            topic: data.topics,
+            questionsAnswered: data.questionsAnswered,
+            score: data.score,
+            overallFeedback: data.overallFeedback,
+            transcript: data.transcript,
+            recordingUrl: data.recordingUrl,
+            evaluation: data.evaluation,
+            vapiCallId: data.vapiCallId,
+          });
+          sheetsSynced++;
+        } catch (e) {
+          console.error("[Sync VAPI] Sheet append error:", e);
+        }
       }
     }
 

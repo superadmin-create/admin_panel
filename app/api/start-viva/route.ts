@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/lib/db";
+import { queryWithRetry } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -7,7 +7,7 @@ const VAPI_API_URL = 'https://api.vapi.ai';
 
 async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
   try {
-    const result = await pool.query(
+    const result = await queryWithRetry(
       'SELECT teacher_email FROM subjects WHERE LOWER(name) = LOWER($1) LIMIT 1',
       [subjectName]
     );
