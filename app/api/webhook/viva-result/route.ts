@@ -49,9 +49,14 @@ async function saveToDatabase(result: any) {
        (timestamp, student_name, student_email, subject, topics, questions_answered, score, overall_feedback, transcript, recording_url, evaluation, teacher_email, vapi_call_id) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        ON CONFLICT (vapi_call_id) DO UPDATE SET
-         score = CASE WHEN EXCLUDED.score > 0 THEN EXCLUDED.score ELSE viva_results.score END,
+         score = GREATEST(EXCLUDED.score, viva_results.score),
          evaluation = COALESCE(EXCLUDED.evaluation, viva_results.evaluation),
-         overall_feedback = CASE WHEN EXCLUDED.overall_feedback != '' THEN EXCLUDED.overall_feedback ELSE viva_results.overall_feedback END`,
+         overall_feedback = CASE WHEN EXCLUDED.overall_feedback != '' THEN EXCLUDED.overall_feedback ELSE viva_results.overall_feedback END,
+         teacher_email = COALESCE(NULLIF(EXCLUDED.teacher_email, ''), viva_results.teacher_email),
+         student_email = COALESCE(NULLIF(EXCLUDED.student_email, ''), viva_results.student_email),
+         transcript = CASE WHEN EXCLUDED.transcript != '' THEN EXCLUDED.transcript ELSE viva_results.transcript END,
+         recording_url = COALESCE(NULLIF(EXCLUDED.recording_url, ''), viva_results.recording_url),
+         questions_answered = GREATEST(EXCLUDED.questions_answered, viva_results.questions_answered)`,
       [
         timestamp,
         result.studentName || 'Unknown',

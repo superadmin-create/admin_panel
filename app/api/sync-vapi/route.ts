@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { queryWithRetry } from "@/lib/db";
 import { appendVivaResultToSheet } from "@/lib/api/sheets-service-account";
+import { google } from "googleapis";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const VAPI_API_URL = "https://api.vapi.ai";
+const STUDENT_DATA_SHEET_ID = "1dPderiJxJl534xNnzHVVqye9VSx3zZY3ZEgO3vjqpFY";
 
 interface VapiCall {
   id: string;
@@ -25,6 +27,17 @@ interface VapiCall {
   transcript?: string;
   recordingUrl?: string;
   metadata?: Record<string, any>;
+}
+
+interface SheetRow {
+  studentName: string;
+  studentEmail: string;
+  subject: string;
+  score: number;
+  questionsAnswered: number;
+  overallFeedback: string;
+  evaluation: any;
+  timestamp: string;
 }
 
 function parseSystemPrompt(call: VapiCall): { studentName?: string; studentEmail?: string; subject?: string; topics?: string } {
@@ -93,12 +106,86 @@ async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
   }
 }
 
+function tryParseJSON(str: string): any {
+  try {
+    const trimmed = str.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      return JSON.parse(trimmed);
+    }
+  } catch {}
+  return null;
+}
+
+async function fetchSheetsData(): Promise<SheetRow[]> {
+  try {
+    const privateKey = process.env.GOOGLE_PRIVATE_KEY;
+    const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    if (!privateKey || !clientEmail) return [];
+
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: clientEmail,
+        private_key: privateKey.replace(/\\n/g, "\n"),
+      },
+      scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+    });
+
+    const sheets = google.sheets({ version: "v4", auth });
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: STUDENT_DATA_SHEET_ID,
+      range: "'Viva Results'!A2:K",
+    });
+
+    const rows = response.data.values || [];
+    return rows
+      .map((row: any[]) => ({
+        timestamp: row[0] || "",
+        studentName: row[1] || "",
+        studentEmail: row[2] || "",
+        subject: row[3] || "",
+        questionsAnswered: parseInt(row[5]) || 0,
+        score: parseInt(String(row[6]).match(/(\d+)/)?.[1] || "0") || 0,
+        overallFeedback: row[7] || "",
+        evaluation: row[10] ? tryParseJSON(row[10]) : null,
+      }))
+      .filter((r: SheetRow) => r.studentName && r.studentName.toLowerCase() !== "unknown student");
+  } catch (error: any) {
+    console.log("[Sync VAPI] Could not fetch Sheets data:", error.message);
+    return [];
+  }
+}
+
+function findSheetMatch(sheetsData: SheetRow[], studentName: string, subject: string, timestamp: Date): SheetRow | null {
+  for (const row of sheetsData) {
+    if (row.studentName.toLowerCase() === studentName.toLowerCase() &&
+        row.subject.toLowerCase() === subject.toLowerCase()) {
+      const rowDate = new Date(row.timestamp).getTime();
+      const targetDate = timestamp.getTime();
+      const timeDiff = Math.abs(rowDate - targetDate);
+      if (timeDiff < 10 * 60 * 1000) {
+        return row;
+      }
+    }
+  }
+  for (const row of sheetsData) {
+    if (row.studentName.toLowerCase() === studentName.toLowerCase() &&
+        row.subject.toLowerCase() === subject.toLowerCase() &&
+        row.score > 0) {
+      return row;
+    }
+  }
+  return null;
+}
+
 export async function POST() {
   try {
     const apiKey = process.env.VAPI_API_KEY;
     if (!apiKey) {
       return NextResponse.json({ error: "VAPI API key not configured" }, { status: 500 });
     }
+
+    const sheetsData = await fetchSheetsData();
+    console.log(`[Sync VAPI] Loaded ${sheetsData.length} rows from Google Sheets`);
 
     const allCalls: VapiCall[] = [];
     let createdAtLt: string | null = null;
@@ -134,11 +221,14 @@ export async function POST() {
       }
     }
 
+    console.log(`[Sync VAPI] Fetched ${allCalls.length} calls from VAPI`);
+
     const invalidNames = ["unknown student", "unknown", "transient assistant", "", "test", "test user"];
     const invalidSubjects = ["transient assistant", "unknown subject", "unknown", ""];
 
     let synced = 0;
     let updated = 0;
+    let enriched = 0;
     let skipped = 0;
     let sheetsSynced = 0;
 
@@ -163,34 +253,54 @@ export async function POST() {
         teacherEmail = await getTeacherEmailForSubject(data.subject);
       }
 
+      const sheetMatch = findSheetMatch(sheetsData, data.studentName, data.subject, data.timestamp);
+      const bestScore = (sheetMatch && sheetMatch.score > data.score) ? sheetMatch.score : data.score;
+      const bestQuestionsAnswered = (sheetMatch && sheetMatch.questionsAnswered > data.questionsAnswered) ? sheetMatch.questionsAnswered : data.questionsAnswered;
+      const bestFeedback = data.overallFeedback || (sheetMatch?.overallFeedback || "");
+      const bestEvaluation = data.evaluation || sheetMatch?.evaluation || null;
+      const bestEmail = data.studentEmail || (sheetMatch?.studentEmail || "");
+
       const existing = await queryWithRetry(
-        "SELECT id FROM viva_results WHERE vapi_call_id = $1",
+        "SELECT id, score, teacher_email FROM viva_results WHERE vapi_call_id = $1",
         [data.vapiCallId]
       );
 
       if (existing.rows.length > 0) {
+        const currentScore = existing.rows[0].score || 0;
+        const currentTeacher = existing.rows[0].teacher_email || "";
+        const finalScore = Math.max(currentScore, bestScore);
+        const finalTeacher = teacherEmail || currentTeacher;
+
         await queryWithRetry(
           `UPDATE viva_results SET 
-           timestamp = $1, student_name = $2, student_email = $3, subject = $4, 
-           topics = $5, questions_answered = $6, score = $7, overall_feedback = $8, 
-           transcript = $9, recording_url = $10, evaluation = $11, teacher_email = $12
-           WHERE vapi_call_id = $13`,
+           student_name = $1, student_email = $2, subject = $3, 
+           topics = $4, questions_answered = GREATEST(questions_answered, $5), 
+           score = GREATEST(score, $6), 
+           overall_feedback = CASE WHEN $7 != '' THEN $7 ELSE overall_feedback END, 
+           transcript = CASE WHEN $8 != '' THEN $8 ELSE transcript END, 
+           recording_url = COALESCE(NULLIF($9, ''), recording_url),
+           evaluation = COALESCE($10, evaluation), 
+           teacher_email = COALESCE(NULLIF($11, ''), teacher_email)
+           WHERE vapi_call_id = $12`,
           [
-            data.timestamp,
             data.studentName,
-            data.studentEmail,
+            bestEmail,
             data.subject,
             data.topics,
-            data.questionsAnswered,
-            data.score,
-            data.overallFeedback,
+            bestQuestionsAnswered,
+            bestScore,
+            bestFeedback,
             data.transcript,
             data.recordingUrl,
-            data.evaluation ? JSON.stringify(data.evaluation) : null,
-            teacherEmail,
+            bestEvaluation ? JSON.stringify(bestEvaluation) : null,
+            finalTeacher,
             data.vapiCallId,
           ]
         );
+
+        if ((currentScore === 0 && finalScore > 0) || (!currentTeacher && finalTeacher)) {
+          enriched++;
+        }
         updated++;
       } else {
         await queryWithRetry(
@@ -201,15 +311,15 @@ export async function POST() {
           [
             data.timestamp,
             data.studentName,
-            data.studentEmail,
+            bestEmail,
             data.subject,
             data.topics,
-            data.questionsAnswered,
-            data.score,
-            data.overallFeedback,
+            bestQuestionsAnswered,
+            bestScore,
+            bestFeedback,
             data.transcript,
             data.recordingUrl,
-            data.evaluation ? JSON.stringify(data.evaluation) : null,
+            bestEvaluation ? JSON.stringify(bestEvaluation) : null,
             data.vapiCallId,
             teacherEmail,
           ]
@@ -219,15 +329,15 @@ export async function POST() {
         try {
           await appendVivaResultToSheet({
             studentName: data.studentName,
-            studentEmail: data.studentEmail,
+            studentEmail: bestEmail,
             subject: data.subject,
             topic: data.topics,
-            questionsAnswered: data.questionsAnswered,
-            score: data.score,
-            overallFeedback: data.overallFeedback,
+            questionsAnswered: bestQuestionsAnswered,
+            score: bestScore,
+            overallFeedback: bestFeedback,
             transcript: data.transcript,
             recordingUrl: data.recordingUrl,
-            evaluation: data.evaluation,
+            evaluation: bestEvaluation,
             vapiCallId: data.vapiCallId,
           });
           sheetsSynced++;
@@ -237,14 +347,17 @@ export async function POST() {
       }
     }
 
+    const enrichMsg = enriched > 0 ? `, ${enriched} enriched from Sheets` : "";
     return NextResponse.json({
       success: true,
       totalCalls: allCalls.length,
+      sheetsRows: sheetsData.length,
       newResults: synced,
       updatedResults: updated,
+      enrichedResults: enriched,
       skipped,
       sheetsSynced,
-      message: `Synced from VAPI: ${synced} new, ${updated} updated, ${skipped} skipped, ${sheetsSynced} added to Sheets`,
+      message: `Synced from VAPI: ${synced} new, ${updated} updated${enrichMsg}, ${skipped} skipped, ${sheetsSynced} added to Sheets`,
     });
   } catch (error: any) {
     console.error("[Sync VAPI] Error:", error);
