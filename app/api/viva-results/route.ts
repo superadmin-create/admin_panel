@@ -38,6 +38,8 @@ export async function GET() {
         overallFeedback: row.overall_feedback || "",
         transcript: row.transcript || "",
         recordingUrl: row.recording_url || "",
+        evaluation: row.evaluation || null,
+        marksBreakdown: row.marks_breakdown || null,
         status: (row.score >= 50 ? "passed" : "failed") as "passed" | "failed"
       }));
 

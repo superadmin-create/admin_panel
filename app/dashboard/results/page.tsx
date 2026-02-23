@@ -161,6 +161,13 @@ export default function ResultsPage() {
         )
       : 0;
 
+  const getMarksSummary = (result: VivaResult) => {
+    if (!result.marksBreakdown || result.marksBreakdown.length === 0) return null;
+    const totalMarks = result.marksBreakdown.reduce((sum: number, item: any) => sum + (item.marks || 0), 0);
+    const totalMaxMarks = result.marksBreakdown.reduce((sum: number, item: any) => sum + (item.maxMarks || 0), 0);
+    return { totalMarks, totalMaxMarks };
+  };
+
   const getScoreBadge = (score: number) => {
     if (score < passingScore) {
       return (
@@ -527,9 +534,9 @@ export default function ResultsPage() {
                           <TableHead>Student</TableHead>
                           <TableHead>Subject</TableHead>
                           <TableHead className="text-center">Score</TableHead>
-                          <TableHead className="text-center">Questions</TableHead>
+                          <TableHead className="text-center">Marks</TableHead>
+                          <TableHead className="text-center">Evaluation</TableHead>
                           <TableHead>Date & Time</TableHead>
-                          <TableHead>Feedback</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -566,18 +573,46 @@ export default function ResultsPage() {
                               {getScoreBadge(result.score)}
                             </TableCell>
                             <TableCell className="text-center">
-                              {result.questionsAnswered}
+                              {(() => {
+                                const summary = getMarksSummary(result);
+                                if (summary) {
+                                  return (
+                                    <span className="font-mono text-sm font-semibold">
+                                      {summary.totalMarks}/{summary.totalMaxMarks}
+                                    </span>
+                                  );
+                                }
+                                return <span className="text-muted-foreground text-sm">-</span>;
+                              })()}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {result.evaluation && (result.evaluation.knowledge !== undefined || result.evaluation.clarity !== undefined || result.evaluation.depth !== undefined) ? (
+                                <div className="flex items-center gap-1 justify-center flex-wrap">
+                                  {result.evaluation.knowledge !== undefined && (
+                                    <Badge variant={result.evaluation.knowledge >= 80 ? "success" : result.evaluation.knowledge >= 60 ? "warning" : "destructive"} className="text-[10px] px-1.5 py-0">
+                                      K:{result.evaluation.knowledge}
+                                    </Badge>
+                                  )}
+                                  {result.evaluation.clarity !== undefined && (
+                                    <Badge variant={result.evaluation.clarity >= 80 ? "success" : result.evaluation.clarity >= 60 ? "warning" : "destructive"} className="text-[10px] px-1.5 py-0">
+                                      C:{result.evaluation.clarity}
+                                    </Badge>
+                                  )}
+                                  {result.evaluation.depth !== undefined && (
+                                    <Badge variant={result.evaluation.depth >= 80 ? "success" : result.evaluation.depth >= 60 ? "warning" : "destructive"} className="text-[10px] px-1.5 py-0">
+                                      D:{result.evaluation.depth}
+                                    </Badge>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">-</span>
+                              )}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                                 <Calendar className="h-3 w-3" />
                                 {formatDate(result.timestamp)}
                               </div>
-                            </TableCell>
-                            <TableCell>
-                              <p className="text-sm text-muted-foreground max-w-xs truncate">
-                                {result.overallFeedback || "No feedback"}
-                              </p>
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
@@ -745,68 +780,38 @@ export default function ResultsPage() {
                 <div className="mb-6 space-y-4">
                   <h4 className="font-semibold text-lg flex items-center gap-2">
                     <TrendingUp className="h-5 w-5 text-primary" />
-                    Marks Awarded
+                    Evaluation Scores
                   </h4>
                   
-                  {/* Score Breakdown with Color Coding */}
-                  <div className="grid grid-cols-3 gap-4">
-                    {selectedResult.evaluation.knowledge !== undefined && (() => {
-                      const score = selectedResult.evaluation.knowledge;
-                      const colorClass = score >= 80 
-                        ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" 
+                  <div className="space-y-3">
+                    {[
+                      { label: "Knowledge", value: selectedResult.evaluation.knowledge },
+                      { label: "Clarity", value: selectedResult.evaluation.clarity },
+                      { label: "Depth", value: selectedResult.evaluation.depth },
+                    ].filter(item => item.value !== undefined).map((item) => {
+                      const score = item.value as number;
+                      const barColor = score >= 80 
+                        ? "bg-green-500" 
                         : score >= 60 
-                        ? "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800"
-                        : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800";
+                        ? "bg-yellow-500"
+                        : "bg-red-500";
                       const textColor = score >= 80 
                         ? "text-green-600 dark:text-green-400" 
                         : score >= 60 
                         ? "text-yellow-600 dark:text-yellow-400"
                         : "text-red-600 dark:text-red-400";
                       return (
-                        <div className={`p-4 rounded-lg border text-center ${colorClass}`}>
-                          <div className={`text-2xl font-bold ${textColor}`}>{score}%</div>
-                          <div className="text-xs text-muted-foreground mt-1">Knowledge</div>
+                        <div key={item.label} className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-medium">{item.label}</span>
+                            <span className={`font-bold ${textColor}`}>{score}/100</span>
+                          </div>
+                          <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${score}%` }} />
+                          </div>
                         </div>
                       );
-                    })()}
-                    {selectedResult.evaluation.clarity !== undefined && (() => {
-                      const score = selectedResult.evaluation.clarity;
-                      const colorClass = score >= 80 
-                        ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" 
-                        : score >= 60 
-                        ? "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800"
-                        : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800";
-                      const textColor = score >= 80 
-                        ? "text-green-600 dark:text-green-400" 
-                        : score >= 60 
-                        ? "text-yellow-600 dark:text-yellow-400"
-                        : "text-red-600 dark:text-red-400";
-                      return (
-                        <div className={`p-4 rounded-lg border text-center ${colorClass}`}>
-                          <div className={`text-2xl font-bold ${textColor}`}>{score}%</div>
-                          <div className="text-xs text-muted-foreground mt-1">Clarity</div>
-                        </div>
-                      );
-                    })()}
-                    {selectedResult.evaluation.depth !== undefined && (() => {
-                      const score = selectedResult.evaluation.depth;
-                      const colorClass = score >= 80 
-                        ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" 
-                        : score >= 60 
-                        ? "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800"
-                        : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800";
-                      const textColor = score >= 80 
-                        ? "text-green-600 dark:text-green-400" 
-                        : score >= 60 
-                        ? "text-yellow-600 dark:text-yellow-400"
-                        : "text-red-600 dark:text-red-400";
-                      return (
-                        <div className={`p-4 rounded-lg border text-center ${colorClass}`}>
-                          <div className={`text-2xl font-bold ${textColor}`}>{score}%</div>
-                          <div className="text-xs text-muted-foreground mt-1">Depth</div>
-                        </div>
-                      );
-                    })()}
+                    })}
                   </div>
 
                   {/* Strengths */}
@@ -849,67 +854,60 @@ export default function ResultsPage() {
                 </div>
               )}
 
-              {/* Marks Breakdown (from AI evaluation) */}
+              {/* Marks Breakdown Table */}
               {selectedResult.marksBreakdown && selectedResult.marksBreakdown.length > 0 && (
-                <div className="space-y-6 mb-6">
-                  <h4 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-primary" />
-                    Question-by-Question Marks
-                  </h4>
-                  {selectedResult.marksBreakdown.map((item: any) => {
-                    const marksPercentage = (item.marks / item.maxMarks) * 100;
-                    const markColor =
-                      marksPercentage >= 80
-                        ? "text-green-600 dark:text-green-400"
-                        : marksPercentage >= 60
-                        ? "text-yellow-600 dark:text-yellow-400"
-                        : "text-red-600 dark:text-red-400";
-                    const markBg =
-                      marksPercentage >= 80
-                        ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
-                        : marksPercentage >= 60
-                        ? "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800"
-                        : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800";
-
-                    return (
-                      <div
-                        key={item.questionNumber}
-                        className="border rounded-lg p-5 bg-card shadow-sm"
-                      >
-                        <div className="flex items-center justify-between mb-4 pb-3 border-b">
-                          <h5 className="font-semibold text-base">
-                            Question {item.questionNumber}
-                          </h5>
-                          <div className={`px-3 py-1 rounded-md font-bold text-sm border ${markBg} ${markColor}`}>
-                            {item.marks}/{item.maxMarks} marks
-                          </div>
-                        </div>
-
-                        <div className="mb-4">
-                          <div className="text-xs font-semibold text-primary mb-2 uppercase">Question:</div>
-                          <div className="p-3 bg-primary/5 border-l-4 border-primary rounded-md">
-                            <p className="text-sm leading-relaxed">{item.question}</p>
-                          </div>
-                        </div>
-
-                        <div className="mb-4">
-                          <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase">Student's Answer:</div>
-                          <div className="p-3 bg-muted/50 border-l-4 border-muted-foreground rounded-md">
-                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{item.answer || "No answer provided"}</p>
-                          </div>
-                        </div>
-
-                        {item.feedback && (
-                          <div>
-                            <div className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-2 uppercase">Feedback:</div>
-                            <div className="p-3 bg-purple-50 dark:bg-purple-950/20 border-l-4 border-purple-500 rounded-md">
-                              <p className="text-sm leading-relaxed">{item.feedback}</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                <div className="mb-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold text-lg flex items-center gap-2">
+                      <FileText className="h-5 w-5 text-primary" />
+                      Marks Breakdown
+                    </h4>
+                    {(() => {
+                      const summary = getMarksSummary(selectedResult);
+                      if (summary) {
+                        return (
+                          <Badge variant="outline" className="font-mono text-sm px-3 py-1">
+                            Total: {summary.totalMarks}/{summary.totalMaxMarks}
+                          </Badge>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                  <div className="rounded-lg border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12 text-center">Q#</TableHead>
+                          <TableHead>Question</TableHead>
+                          <TableHead>Student Answer</TableHead>
+                          <TableHead className="w-24 text-center">Marks</TableHead>
+                          <TableHead>Feedback</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedResult.marksBreakdown.map((item: any) => {
+                          const marksPercentage = item.maxMarks > 0 ? (item.marks / item.maxMarks) * 100 : 0;
+                          const markColor = marksPercentage >= 80 
+                            ? "text-green-600 dark:text-green-400" 
+                            : marksPercentage >= 60 
+                            ? "text-yellow-600 dark:text-yellow-400" 
+                            : "text-red-600 dark:text-red-400";
+                          return (
+                            <TableRow key={item.questionNumber}>
+                              <TableCell className="text-center font-semibold">{item.questionNumber}</TableCell>
+                              <TableCell className="text-sm max-w-[200px]">{item.question}</TableCell>
+                              <TableCell className="text-sm max-w-[200px] text-muted-foreground">{item.answer || "No answer"}</TableCell>
+                              <TableCell className="text-center">
+                                <span className={`font-bold ${markColor}`}>{item.marks}/{item.maxMarks}</span>
+                              </TableCell>
+                              <TableCell className="text-sm max-w-[200px] text-muted-foreground">{item.feedback || "-"}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               )}
 
