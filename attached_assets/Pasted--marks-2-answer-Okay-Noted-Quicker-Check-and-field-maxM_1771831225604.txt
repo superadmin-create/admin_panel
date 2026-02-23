@@ -1,0 +1,65 @@
+[
+  {
+    "marks": 2,
+    "answer": "Okay. Noted. Quicker. Check and field.",
+    "maxMarks": 10,
+    "question": "What is your favorite sport and why do you enjoy it?",
+    "questionNumber": 1
+  },
+  {
+    "marks": 2,
+    "answer": "Hey. Can you please repeat",
+    "maxMarks": 10,
+    "question": "Thank you. What are some key benefits of participating in sports?",
+    "questionNumber": 2
+  },
+  {
+    "marks": 2,
+    "answer": "Sorry. I don't know.",
+    "maxMarks": 10,
+    "question": "Of course. What are some key benefits of participating in sports?",
+    "questionNumber": 3
+  },
+  {
+    "marks": 2,
+    "answer": "Sorry. I don't know.",
+    "maxMarks": 10,
+    "question": "That's okay. Let's move to the next question. How do you think sports can influence social interactions among people?",
+    "questionNumber": 4
+  },
+  {
+    "marks": 2,
+    "answer": "Please repeat the question.",
+    "maxMarks": 10,
+    "question": "That's okay. Let's move to the next question. What role do you think sports play in promoting physical health?",
+    "questionNumber": 5
+  },
+  {
+    "marks": 2,
+    "answer": "Next question, please.",
+    "maxMarks": 10,
+    "question": "Certainly, what role do you think sports play in promoting physical health?",
+    "questionNumber": 6
+  },
+  {
+    "marks": 2,
+    "answer": "There's basically face many problems like injuries, lack of nutrition, lack of proper diet, and lack of proper workout program, and etcetera.",
+    "maxMarks": 10,
+    "question": "Alright. What are some common challenges that athletes face in their sports careers?",
+    "questionNumber": 7
+  },
+  {
+    "marks": 2,
+    "answer": "Sorry,",
+    "maxMarks": 10,
+    "question": "Thank you. Finally, how do you see the future of sports evolving in the next decade?",
+    "questionNumber": 8
+  },
+  {
+    "marks": 2,
+    "answer": "Thank you so much.",
+    "maxMarks": 10,
+    "question": "Thank you. Finally, how do you see the future of sports evolving in the next decade?",
+    "questionNumber": 9
+  }
+]
