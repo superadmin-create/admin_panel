@@ -60,7 +60,7 @@ async function saveToDatabase(result: any) {
          transcript = CASE WHEN EXCLUDED.transcript != '' THEN EXCLUDED.transcript ELSE viva_results.transcript END,
          recording_url = COALESCE(NULLIF(EXCLUDED.recording_url, ''), viva_results.recording_url),
          questions_answered = GREATEST(EXCLUDED.questions_answered, viva_results.questions_answered),
-         marks_breakdown = COALESCE(EXCLUDED.marks_breakdown, viva_results.marks_breakdown)`,
+         marks_breakdown = EXCLUDED.marks_breakdown`, //marks_breakdown = COALESCE(EXCLUDED.marks_breakdown, viva_results.marks_breakdown)`
 
       [
         timestamp,
@@ -166,10 +166,15 @@ function normalizeVivaResult(payload: any): any {
         (structuredData.marks
           ? { marks: structuredData.marks, feedback: structuredData.feedback }
           : null),
+      // marksBreakdown:
+      //   structuredData.marks_breakdown ||
+      //   structuredData.marksBreakdown ||
+      //   structuredData.marks ||
+      //   null,
       marksBreakdown:
-        structuredData.marks_breakdown ||
-        structuredData.marksBreakdown ||
-        structuredData.marks ||
+        structuredData.marks_breakdown ??
+        structuredData.marksBreakdown ??
+        structuredData.marks ??
         null,
       vapiCallId: call.id,
     };
