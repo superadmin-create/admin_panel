@@ -560,6 +560,10 @@ function extractVivaData(call: VapiCall) {
   let evaluation = structuredData.evaluation || 
                    (structuredData.marks ? { marks: structuredData.marks, feedback: structuredData.feedback } : null);
 
+  let marksBreakdown = structuredData.marks_breakdown ||
+                       structuredData.marksBreakdown ||
+                       null;
+
   // If no evaluation from VAPI, try Google Sheets fallback
   if (score === 0 && sheetsEvaluationCache) {
     const sheetMatch = findMatchingSheetEvaluation(studentName, subject, new Date(call.createdAt));
@@ -587,6 +591,7 @@ function extractVivaData(call: VapiCall) {
     transcript,
     recordingUrl,
     evaluation,
+    marksBreakdown,
     vapiCallId: call.id,
     needsAIEvaluation: score === 0 && transcript.length > 100
   };
@@ -604,11 +609,70 @@ async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
   }
 }
 
+async function updateMissingMarksBreakdown() {
+  console.log('  Checking for records with missing marks_breakdown...');
+  
+  try {
+    const result = await pool.query(
+      `SELECT id, student_name, student_email, subject, timestamp, transcript, score, evaluation FROM viva_results 
+       WHERE marks_breakdown IS NULL
+       AND transcript IS NOT NULL AND LENGTH(transcript) > 100
+       AND student_name != 'Unknown Student'
+       AND subject != 'Unknown Subject'
+       AND subject != 'Transient Assistant'
+       ORDER BY timestamp DESC LIMIT 20`
+    );
+    
+    if (result.rows.length === 0) {
+      console.log('  No records need marks_breakdown generation');
+      return 0;
+    }
+    
+    console.log(`  Found ${result.rows.length} records needing marks_breakdown`);
+    let generated = 0;
+    
+    for (const row of result.rows) {
+      const aiEval = await generateAIEvaluation(row.transcript, row.subject, row.student_name);
+      
+      if (aiEval && aiEval.marksBreakdown) {
+        const updates: any = {
+          marks_breakdown: JSON.stringify(aiEval.marksBreakdown)
+        };
+        
+        if (!row.evaluation && aiEval.evaluation) {
+          updates.evaluation = JSON.stringify(aiEval.evaluation);
+        }
+        if ((!row.score || row.score === 0) && aiEval.score > 0) {
+          updates.score = aiEval.score;
+          updates.questions_answered = aiEval.questionsAnswered;
+          updates.overall_feedback = aiEval.overallFeedback;
+        }
+        
+        const setClauses = Object.keys(updates).map((key, i) => `${key} = $${i + 1}`).join(', ');
+        const values = [...Object.values(updates), row.id];
+        
+        await pool.query(
+          `UPDATE viva_results SET ${setClauses} WHERE id = $${values.length}`,
+          values
+        );
+        
+        console.log(`    [AI] Generated marks_breakdown for ${row.student_name} (id: ${row.id})`);
+        generated++;
+      }
+    }
+    
+    console.log(`  Generated marks_breakdown for ${generated} records`);
+    return generated;
+  } catch (error: any) {
+    console.log(`  Error generating marks_breakdown: ${error.message}`);
+    return 0;
+  }
+}
+
 async function updateMissingEvaluations() {
   console.log('  Checking for records with missing evaluations...');
   
   try {
-    // Get records with score = 0 that have transcripts (we need transcripts for AI evaluation)
     const result = await pool.query(
       `SELECT id, student_name, student_email, subject, timestamp, transcript, vapi_call_id FROM viva_results 
        WHERE (score = 0 OR score IS NULL) 
@@ -771,9 +835,11 @@ async function syncFromVapi() {
       if (existing.rows.length > 0) {
         await pool.query(
           `UPDATE viva_results SET 
-           timestamp = $1, student_name = $2, student_email = $3, subject = $4, 
-           topics = $5, questions_answered = $6, score = $7, overall_feedback = $8, 
-           transcript = $9, recording_url = $10, evaluation = $11, teacher_email = $12
+           timestamp = $1, student_name = $2, student_email = COALESCE(NULLIF($3, ''), student_email), subject = $4, 
+           topics = $5, questions_answered = GREATEST($6, questions_answered), score = GREATEST($7, score), overall_feedback = CASE WHEN $8 != '' THEN $8 ELSE overall_feedback END, 
+           transcript = CASE WHEN $9 != '' THEN $9 ELSE transcript END, recording_url = COALESCE(NULLIF($10, ''), recording_url), 
+           evaluation = COALESCE($11::jsonb, evaluation), teacher_email = COALESCE(NULLIF($12, ''), teacher_email),
+           marks_breakdown = COALESCE($14::jsonb, marks_breakdown)
            WHERE vapi_call_id = $13`,
           [
             data.timestamp,
@@ -788,7 +854,8 @@ async function syncFromVapi() {
             data.recordingUrl,
             data.evaluation ? JSON.stringify(data.evaluation) : null,
             teacherEmail,
-            data.vapiCallId
+            data.vapiCallId,
+            data.marksBreakdown ? JSON.stringify(data.marksBreakdown) : null
           ]
         );
         updated++;
@@ -796,8 +863,8 @@ async function syncFromVapi() {
         await pool.query(
           `INSERT INTO viva_results 
            (timestamp, student_name, student_email, subject, topics, questions_answered, 
-            score, overall_feedback, transcript, recording_url, evaluation, vapi_call_id, teacher_email) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            score, overall_feedback, transcript, recording_url, evaluation, vapi_call_id, teacher_email, marks_breakdown) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
           [
             data.timestamp,
             data.studentName,
@@ -811,7 +878,8 @@ async function syncFromVapi() {
             data.recordingUrl,
             data.evaluation ? JSON.stringify(data.evaluation) : null,
             data.vapiCallId,
-            teacherEmail
+            teacherEmail,
+            data.marksBreakdown ? JSON.stringify(data.marksBreakdown) : null
           ]
         );
         synced++;
@@ -856,6 +924,12 @@ async function main() {
     console.log(`  Updated ${updatedCount} records with evaluations`);
   }
   
+  // Generate marks_breakdown for records that have transcripts but no marks
+  const marksGenerated = await updateMissingMarksBreakdown();
+  if (marksGenerated > 0) {
+    console.log(`  Generated marks_breakdown for ${marksGenerated} records`);
+  }
+  
   // Sync emails from DB to Sheets
   const emailsSynced = await syncEmailsToSheets();
   if (emailsSynced > 0) {
@@ -869,6 +943,7 @@ async function main() {
     sheetsEvaluationCache = null; // Clear cache for fresh data
     await syncFromVapi();
     await updateMissingEvaluations();
+    await updateMissingMarksBreakdown();
     await syncEmailsToSheets();
   }, SYNC_INTERVAL_MS);
 }

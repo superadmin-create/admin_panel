@@ -57,6 +57,7 @@ export default function ResultsPage() {
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [generatingMarks, setGeneratingMarks] = useState(false);
 
   const getTeacherEmail = () => {
     if (typeof window !== 'undefined') {
@@ -114,6 +115,28 @@ export default function ResultsPage() {
       setTimeout(() => setSyncMessage(null), 5000);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleGenerateMarks = async () => {
+    setGeneratingMarks(true);
+    setSyncMessage(null);
+    try {
+      const response = await fetch("/api/backfill-marks", { method: "POST" });
+      const data = await response.json();
+      if (data.success) {
+        setSyncMessage(`Generated marks for ${data.processed} results. ${data.remaining > 0 ? `${data.remaining} remaining - click again to continue.` : 'All done!'}`);
+        await fetchResults();
+        setTimeout(() => setSyncMessage(null), 8000);
+      } else {
+        setSyncMessage(data.error || "Failed to generate marks");
+        setTimeout(() => setSyncMessage(null), 5000);
+      }
+    } catch (err) {
+      setSyncMessage("Failed to generate marks");
+      setTimeout(() => setSyncMessage(null), 5000);
+    } finally {
+      setGeneratingMarks(false);
     }
   };
 
@@ -462,6 +485,19 @@ export default function ResultsPage() {
                     <>
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Sync Results
+                    </>
+                  )}
+                </Button>
+                <Button onClick={handleGenerateMarks} variant="outline" size="sm" disabled={generatingMarks}>
+                  {generatingMarks ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <TrendingUp className="h-4 w-4 mr-2" />
+                      Generate Marks
                     </>
                   )}
                 </Button>

@@ -76,7 +76,7 @@ export async function appendVivaResultToSheet(result: StudentVivaResult): Promis
     const feedback = result.evaluation?.feedback || result.overallFeedback || "";
     
     // Column order: A=Date&Time, B=StudentName, C=Email, D=Subject, E=Topics, 
-    //               F=QuestionsAnswered, G=Score, H=OverallFeedback, I=Transcript, J=Recording, K=Evaluation(JSON)
+    //               F=QuestionsAnswered, G=Score, H=OverallFeedback, I=Transcript, J=Recording, K=Evaluation(JSON), L=MarksBreakdown(JSON)
     const row = [
       timestamp,
       result.studentName || "",
@@ -89,11 +89,12 @@ export async function appendVivaResultToSheet(result: StudentVivaResult): Promis
       result.transcript || "",
       result.recordingUrl || "",
       result.evaluation ? JSON.stringify(result.evaluation) : "",
+      result.marksBreakdown ? (typeof result.marksBreakdown === 'string' ? result.marksBreakdown : JSON.stringify(result.marksBreakdown)) : "",
     ];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: STUDENT_DATA_SHEET_ID,
-      range: `${VIVA_RESULTS_SHEET}!A:K`,
+      range: `${VIVA_RESULTS_SHEET}!A:L`,
       valueInputOption: "USER_ENTERED",
       insertDataOption: "INSERT_ROWS",
       requestBody: {

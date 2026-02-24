@@ -75,6 +75,7 @@ function extractVivaData(call: VapiCall) {
   const score = structuredData.score || structuredData.totalMarks || structuredData.marks || 0;
   const overallFeedback = structuredData.overallFeedback || structuredData.feedback || call.analysis?.summary || "";
   const evaluation = structuredData.evaluation || (structuredData.marks ? { marks: structuredData.marks, feedback: structuredData.feedback } : null);
+  const marksBreakdown = structuredData.marks_breakdown || structuredData.marksBreakdown || null;
   const transcript = call.artifact?.transcript || (call as any).transcript || "";
   const recordingUrl = call.artifact?.recordingUrl || (call as any).recordingUrl || "";
 
@@ -90,6 +91,7 @@ function extractVivaData(call: VapiCall) {
     transcript,
     recordingUrl,
     evaluation,
+    marksBreakdown,
     vapiCallId: call.id,
   };
 }
@@ -280,7 +282,8 @@ export async function POST() {
            transcript = CASE WHEN $8 != '' THEN $8 ELSE transcript END, 
            recording_url = COALESCE(NULLIF($9, ''), recording_url),
            evaluation = COALESCE($10, evaluation), 
-           teacher_email = COALESCE(NULLIF($11, ''), teacher_email)
+           teacher_email = COALESCE(NULLIF($11, ''), teacher_email),
+           marks_breakdown = COALESCE($13::jsonb, marks_breakdown)
            WHERE vapi_call_id = $12`,
           [
             data.studentName,
@@ -295,6 +298,7 @@ export async function POST() {
             bestEvaluation ? JSON.stringify(bestEvaluation) : null,
             finalTeacher,
             data.vapiCallId,
+            data.marksBreakdown ? JSON.stringify(data.marksBreakdown) : null,
           ]
         );
 
@@ -306,8 +310,8 @@ export async function POST() {
         await queryWithRetry(
           `INSERT INTO viva_results 
            (timestamp, student_name, student_email, subject, topics, questions_answered, 
-            score, overall_feedback, transcript, recording_url, evaluation, vapi_call_id, teacher_email) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            score, overall_feedback, transcript, recording_url, evaluation, vapi_call_id, teacher_email, marks_breakdown) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
           [
             data.timestamp,
             data.studentName,
@@ -322,6 +326,7 @@ export async function POST() {
             bestEvaluation ? JSON.stringify(bestEvaluation) : null,
             data.vapiCallId,
             teacherEmail,
+            data.marksBreakdown ? JSON.stringify(data.marksBreakdown) : null,
           ]
         );
         synced++;
@@ -339,6 +344,7 @@ export async function POST() {
             recordingUrl: data.recordingUrl,
             evaluation: bestEvaluation,
             vapiCallId: data.vapiCallId,
+            marksBreakdown: data.marksBreakdown,
           });
           sheetsSynced++;
         } catch (e) {
