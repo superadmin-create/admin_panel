@@ -49,7 +49,7 @@ async function saveToDatabase(result: any) {
 
     await queryWithRetry(
       `INSERT INTO viva_results 
-       (timestamp, student_name, student_email, subject, topics, questions_answered, score, overall_feedback, transcript, recording_url, evaluation, teacher_email, vapi_call_id) 
+       (timestamp, student_name, student_email, subject, topics, questions_answered, score, overall_feedback, transcript, recording_url, evaluation, teacher_email, vapi_call_id, marks_breakdown) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        ON CONFLICT (vapi_call_id) DO UPDATE SET
          score = GREATEST(EXCLUDED.score, viva_results.score),
