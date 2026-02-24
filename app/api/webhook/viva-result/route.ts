@@ -46,6 +46,10 @@ async function saveToDatabase(result: any) {
       ? JSON.stringify(result.evaluation)
       : null;
     const teacherEmail = await getTeacherEmailForSubject(result.subject || "");
+    const marksBreakdownToSave =
+      Array.isArray(result.marksBreakdown) && result.marksBreakdown.length === 0
+        ? null
+        : result.marksBreakdown || null;
 
     await queryWithRetry(
       `INSERT INTO viva_results 
@@ -76,7 +80,7 @@ async function saveToDatabase(result: any) {
         evaluation,
         teacherEmail,
         result.vapiCallId || null,
-        result.marksBreakdown ?? null, // changed this line
+        marksBreakdownToSave, // changed this line
       ],
     );
 
