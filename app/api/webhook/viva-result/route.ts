@@ -76,7 +76,7 @@ async function saveToDatabase(result: any) {
         evaluation,
         teacherEmail,
         result.vapiCallId || null,
-        result.marksBreakdown ? JSON.stringify(result.marksBreakdown) : null,
+        result.marksBreakdown ?? null, // changed this line
       ],
     );
 
