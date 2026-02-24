@@ -8,68 +8,53 @@ const STUDENT_DATA_SHEET_ID = "1dPderiJxJl534xNnzHVVqye9VSx3zZY3ZEgO3vjqpFY";
 
 async function getAccessToken() {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY
-    ? "repl " + process.env.REPL_IDENTITY
-    : process.env.WEB_REPL_RENEWAL
-      ? "depl " + process.env.WEB_REPL_RENEWAL
-      : null;
+  const xReplitToken = process.env.REPL_IDENTITY 
+    ? 'repl ' + process.env.REPL_IDENTITY 
+    : process.env.WEB_REPL_RENEWAL 
+    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
+    : null;
 
   const response = await fetch(
-    "https://" +
-      hostname +
-      "/api/v2/connection?include_secrets=true&connector_names=google-sheet",
-    { headers: { Accept: "application/json", X_REPLIT_TOKEN: xReplitToken! } },
+    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-sheet',
+    { headers: { 'Accept': 'application/json', 'X_REPLIT_TOKEN': xReplitToken! } }
   );
-
+  
   const data = await response.json();
   return data.items?.[0]?.settings?.access_token;
 }
 
 function parseTimestamp(ts: string): Date {
   if (!ts) return new Date();
-
-  if (ts.includes("T") && (ts.includes("Z") || ts.includes("+"))) {
+  
+  if (ts.includes('T') && (ts.includes('Z') || ts.includes('+'))) {
     const date = new Date(ts);
     if (!isNaN(date.getTime())) return date;
   }
-
-  const formattedMatch = ts.match(
-    /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4}),?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?/i,
-  );
+  
+  const formattedMatch = ts.match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4}),?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?/i);
   if (formattedMatch) {
     const [, day, month, year, hour, minute, second, ampm] = formattedMatch;
     const monthMap: Record<string, number> = {
-      jan: 0,
-      feb: 1,
-      mar: 2,
-      apr: 3,
-      may: 4,
-      jun: 5,
-      jul: 6,
-      aug: 7,
-      sep: 8,
-      oct: 9,
-      nov: 10,
-      dec: 11,
+      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
     };
     let hour24 = parseInt(hour, 10);
-    if (ampm?.toLowerCase() === "pm" && hour24 !== 12) hour24 += 12;
-    if (ampm?.toLowerCase() === "am" && hour24 === 12) hour24 = 0;
+    if (ampm?.toLowerCase() === 'pm' && hour24 !== 12) hour24 += 12;
+    if (ampm?.toLowerCase() === 'am' && hour24 === 12) hour24 = 0;
     return new Date(
       parseInt(year, 10),
       monthMap[month.toLowerCase()],
       parseInt(day, 10),
       hour24,
       parseInt(minute, 10),
-      parseInt(second || "0", 10),
+      parseInt(second || '0', 10)
     );
   }
 
   const slashMatch = ts.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
   if (slashMatch) {
     const [, p1, p2, year] = slashMatch;
-    const fullYear =
-      year.length === 2 ? 2000 + parseInt(year, 10) : parseInt(year, 10);
+    const fullYear = year.length === 2 ? 2000 + parseInt(year, 10) : parseInt(year, 10);
     return new Date(fullYear, parseInt(p1, 10) - 1, parseInt(p2, 10));
   }
 
@@ -82,8 +67,8 @@ function parseTimestamp(ts: string): Date {
 async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
   try {
     const result = await queryWithRetry(
-      "SELECT teacher_email FROM subjects WHERE LOWER(name) = LOWER($1) AND teacher_email IS NOT NULL AND teacher_email != '' LIMIT 1",
-      [subjectName],
+      'SELECT teacher_email FROM subjects WHERE LOWER(name) = LOWER($1) AND teacher_email IS NOT NULL AND teacher_email != \'\' LIMIT 1',
+      [subjectName]
     );
     if (result.rows[0]?.teacher_email) return result.rows[0].teacher_email;
 
@@ -94,9 +79,9 @@ async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
        OR similarity(LOWER(name), LOWER($1)) > 0.3)
        ORDER BY similarity(LOWER(name), LOWER($1)) DESC
        LIMIT 1`,
-      [subjectName],
+      [subjectName]
     );
-    return fuzzyResult.rows[0]?.teacher_email || "";
+    return fuzzyResult.rows[0]?.teacher_email || '';
   } catch (err) {
     try {
       const fuzzyResult = await queryWithRetry(
@@ -104,11 +89,11 @@ async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
          WHERE teacher_email IS NOT NULL AND teacher_email != '' 
          AND (LOWER($1) LIKE '%' || LOWER(name) || '%' OR LOWER(name) LIKE '%' || LOWER($1) || '%')
          LIMIT 1`,
-        [subjectName],
+        [subjectName]
       );
-      return fuzzyResult.rows[0]?.teacher_email || "";
+      return fuzzyResult.rows[0]?.teacher_email || '';
     } catch {
-      return "";
+      return '';
     }
   }
 }
@@ -116,20 +101,17 @@ async function getTeacherEmailForSubject(subjectName: string): Promise<string> {
 export async function POST() {
   try {
     try {
-      await queryWithRetry("CREATE EXTENSION IF NOT EXISTS pg_trgm");
+      await queryWithRetry('CREATE EXTENSION IF NOT EXISTS pg_trgm');
     } catch {}
 
     const accessToken = await getAccessToken();
     if (!accessToken) {
-      return NextResponse.json(
-        { error: "No Google Sheets access" },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: "No Google Sheets access" }, { status: 500 });
     }
 
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
-    const sheets = google.sheets({ version: "v4", auth: oauth2Client });
+    const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
 
     let subjectsSynced = 0;
     let topicsSynced = 0;
@@ -146,7 +128,7 @@ export async function POST() {
             `INSERT INTO subjects (name, code, status, teacher_email) 
              VALUES ($1, $2, 'active', $3) 
              ON CONFLICT (name) DO UPDATE SET code = EXCLUDED.code, teacher_email = EXCLUDED.teacher_email`,
-            [row[0], row[1] || "", row[3] || null],
+            [row[0], row[1] || '', row[3] || null]
           );
           subjectsSynced++;
         }
@@ -167,7 +149,7 @@ export async function POST() {
             `INSERT INTO topics (subject_name, name, status, teacher_email) 
              VALUES ($1, $2, 'active', $3) 
              ON CONFLICT (subject_name, name) DO NOTHING`,
-            [row[0], row[1], row[3] || null],
+            [row[0], row[1], row[3] || null]
           );
           topicsSynced++;
         }
@@ -178,60 +160,50 @@ export async function POST() {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: STUDENT_DATA_SHEET_ID,
-      range: "'Viva Results'!A2:M", // Added column M for marks_breakdown
+      range: "'Viva Results'!A2:L",
     });
 
     const rows = response.data.values || [];
-
-    const dbCount = await queryWithRetry(
-      "SELECT COUNT(*) as count FROM viva_results",
-    );
+    
+    const dbCount = await queryWithRetry('SELECT COUNT(*) as count FROM viva_results');
     const existingCount = parseInt(dbCount.rows[0].count);
-
+    
     if (existingCount > 0) {
-      await queryWithRetry("TRUNCATE TABLE viva_results");
+      await queryWithRetry('TRUNCATE TABLE viva_results');
     }
-
+    
     const teacherEmailCache: Record<string, string> = {};
-
+    
     let synced = 0;
     for (const row of rows) {
       if (row[1]) {
-        const timestamp = parseTimestamp(row[0] || "");
-        const questionsAnswered = row[5]
-          ? parseInt(String(row[5]).match(/(\d+)/)?.[1] || "0", 10)
-          : 0;
-        const score = row[6]
-          ? parseInt(String(row[6]).match(/(\d+)/)?.[1] || "0", 10)
-          : 0;
-        const subjectName = row[3] || "Unknown Subject";
-
+        const timestamp = parseTimestamp(row[0] || '');
+        const questionsAnswered = row[5] ? parseInt(String(row[5]).match(/(\d+)/)?.[1] || '0', 10) : 0;
+        const score = row[6] ? parseInt(String(row[6]).match(/(\d+)/)?.[1] || '0', 10) : 0;
+        const subjectName = row[3] || 'Unknown Subject';
+        
         let evaluation = null;
         if (row[10]) {
           try {
             const evalStr = String(row[10]).trim();
-            if (evalStr.startsWith("{") || evalStr.startsWith("[")) {
+            if (evalStr.startsWith('{') || evalStr.startsWith('[')) {
               evaluation = JSON.parse(evalStr);
             }
           } catch {}
         }
 
         let marksBreakdown = null;
-        if (row[12]) {
-          // Changed from row[11] to row[12]
+        if (row[11]) {
           try {
-            const mbStr = String(row[12]).trim(); // Changed from row[11] to row[12]
-            if (mbStr.startsWith("{") || mbStr.startsWith("[")) {
+            const mbStr = String(row[11]).trim();
+            if (mbStr.startsWith('{') || mbStr.startsWith('[')) {
               marksBreakdown = JSON.parse(mbStr);
             }
           } catch {}
         }
 
         if (!teacherEmailCache[subjectName]) {
-          const teacherEmailFromSheet = (row[11] || "").toString().trim();
-          teacherEmailCache[subjectName] =
-            teacherEmailFromSheet ||
-            (await getTeacherEmailForSubject(subjectName));
+          teacherEmailCache[subjectName] = await getTeacherEmailForSubject(subjectName);
         }
         const teacherEmail = teacherEmailCache[subjectName];
 
@@ -241,19 +213,19 @@ export async function POST() {
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
           [
             timestamp,
-            row[1] || "Unknown",
-            row[2] || "",
+            row[1] || 'Unknown',
+            row[2] || '',
             subjectName,
-            row[4] || "",
+            row[4] || '',
             questionsAnswered,
             score,
-            row[7] || "",
-            row[8] || "",
+            row[7] || '',
+            row[8] || '',
             row[9] || null,
             evaluation ? JSON.stringify(evaluation) : null,
             teacherEmail || null,
-            marksBreakdown ? JSON.stringify(marksBreakdown) : null,
-          ],
+            marksBreakdown ? JSON.stringify(marksBreakdown) : null
+          ]
         );
         synced++;
       }
@@ -264,35 +236,25 @@ export async function POST() {
       synced,
       subjectsSynced,
       topicsSynced,
-      message: `Synced ${subjectsSynced} subjects, ${topicsSynced} topics, ${synced} viva results from Google Sheets to database`,
+      message: `Synced ${subjectsSynced} subjects, ${topicsSynced} topics, ${synced} viva results from Google Sheets to database`
     });
   } catch (error) {
     console.error("[Sync] Error:", error);
-    return NextResponse.json(
-      { error: "Failed to sync results" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Failed to sync results" }, { status: 500 });
   }
 }
 
 export async function GET() {
   try {
-    const result = await queryWithRetry(
-      "SELECT COUNT(*) as count FROM viva_results",
-    );
-    const lastSync = await queryWithRetry(
-      "SELECT MAX(timestamp) as last FROM viva_results",
-    );
-
+    const result = await queryWithRetry('SELECT COUNT(*) as count FROM viva_results');
+    const lastSync = await queryWithRetry('SELECT MAX(timestamp) as last FROM viva_results');
+    
     return NextResponse.json({
       count: parseInt(result.rows[0].count),
       lastResult: lastSync.rows[0].last,
-      message: "Use POST to trigger a sync from Google Sheets",
+      message: "Use POST to trigger a sync from Google Sheets"
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to get sync status" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Failed to get sync status" }, { status: 500 });
   }
 }
