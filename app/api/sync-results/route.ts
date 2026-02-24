@@ -160,7 +160,7 @@ export async function POST() {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: STUDENT_DATA_SHEET_ID,
-      range: "'Viva Results'!A2:L",
+      range: "'Viva Results'!A2:M", // Added column M for marks_breakdown
     });
 
     const rows = response.data.values || [];
@@ -193,7 +193,7 @@ export async function POST() {
         }
 
         let marksBreakdown = null;
-        if (row[11]) {
+        if (row[12]) { // Changed from row[11] to row[12]
           try {
             const mbStr = String(row[11]).trim();
             if (mbStr.startsWith('{') || mbStr.startsWith('[')) {
@@ -203,7 +203,8 @@ export async function POST() {
         }
 
         if (!teacherEmailCache[subjectName]) {
-          teacherEmailCache[subjectName] = await getTeacherEmailForSubject(subjectName);
+          const teacherEmailFromSheet = (row[11] || '').toString().trim();
+          teacherEmailCache[subjectName] = teacherEmailFromSheet || await getTeacherEmailForSubject(subjectName);
         }
         const teacherEmail = teacherEmailCache[subjectName];
 
