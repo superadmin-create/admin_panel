@@ -51,6 +51,7 @@ export interface StudentVivaResult {
   };
   timestamp?: string;
   vapiCallId?: string;
+  marksBreakdown?: string;
 }
 
 // Invalid values that should not be saved

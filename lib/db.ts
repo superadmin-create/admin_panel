@@ -65,6 +65,8 @@ export interface VivaResult {
   transcript: string;
   recording_url: string | null;
   evaluation: Record<string, unknown> | null;
+  teacher_email?: string;
+  marks_breakdown: Record<string, unknown> | null;
 }
 
 export interface VivaQuestion {
@@ -174,8 +176,8 @@ export async function deleteTopic(subjectName: string, name: string): Promise<bo
 export async function saveVivaResult(result: Omit<VivaResult, 'id'>): Promise<VivaResult> {
   const queryResult = await queryWithRetry(
     `INSERT INTO viva_results 
-     (timestamp, student_name, student_email, subject, topics, questions_answered, score, overall_feedback, transcript, recording_url, evaluation) 
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+     (timestamp, student_name, student_email, subject, topics, questions_answered, score, overall_feedback, transcript, recording_url, evaluation, marks_breakdown) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
      RETURNING *`,
     [
       result.timestamp,
@@ -188,7 +190,9 @@ export async function saveVivaResult(result: Omit<VivaResult, 'id'>): Promise<Vi
       result.overall_feedback,
       result.transcript,
       result.recording_url,
-      result.evaluation ? JSON.stringify(result.evaluation) : null
+      result.evaluation ? JSON.stringify(result.evaluation) : null,
+      result.teacher_email ?? null,
+      result.marks_breakdown ? JSON.stringify(result.marks_breakdown) : null
     ]
   );
   return queryResult.rows[0];
